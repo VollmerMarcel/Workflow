@@ -4,10 +4,9 @@
 
 | | |
 |---|---|
-| Document version | 0.3 — draft for review |
+| Document version | 1.0 |
 | Date | 2026-10-22 |
-| Changes | Model and Monte Carlo harness separated: the model produces one run for one car; the harness aggregates runs |
-| Status | Model definition, no implementation yet |
+| Status | Model definition |
 | Scope | One specific car, one specific user, one specific location |
 | Model output | One run: part states, events, and costs for a single car |
 | Harness output | Distribution of total cost of ownership, part wear, and failures across runs |
@@ -27,7 +26,7 @@ The document is deliberately explicit about what is not modelled: brake failure,
 ## Contents
 
 1. [Purpose and scope](#1-purpose-and-scope)
-2. [Scope decisions](#2-scope-decisions)
+2. [Scope](#2-scope)
 3. [Modeling discipline](#3-modeling-discipline)
 4. [Problem statement](#4-problem-statement)
 5. [Simulation architecture](#5-simulation-architecture)
@@ -49,8 +48,7 @@ The document is deliberately explicit about what is not modelled: brake failure,
 21. [Appendix B — Model constants](#appendix-b--model-constants)
 22. [Appendix C — Worked example](#appendix-c--worked-example)
 23. [Appendix D — Event ordering](#appendix-d--event-ordering)
-24. [Appendix E — Resolved design decisions](#appendix-e--resolved-design-decisions)
-25. [Appendix F — Sources and calibration anchors](#appendix-f--sources-and-calibration-anchors)
+24. [Appendix E — Sources and calibration anchors](#appendix-e--sources-and-calibration-anchors)
 
 ---
 
@@ -74,11 +72,9 @@ The model is deliberately **case-based**: the car, the user, and the location ar
 
 ---
 
-## 2. Scope decisions
+## 2. Scope
 
-These decisions are binding for version 0.1.
-
-| Topic | Decision |
+| Topic | Scope |
 |---|---|
 | Horizon | 365 days by default, configurable |
 | Start date | Required input; seasonality matters |
@@ -88,7 +84,7 @@ These decisions are binding for version 0.1.
 | Accidents | Not modelled; no crash cascade |
 | Paint | Condition indicator only; low monetary weight; no large value tail |
 | Primary monetary metric | Total cost of ownership (cash operating cost) |
-| Depreciation | Reported separately, excluded from TCO |
+| Depreciation | Reported separately, excluded from total cost of ownership |
 | Parameter source | Every numeric input comes from a TOML configuration file |
 | Model boundary | One run simulates one car for one horizon; no replication loop, no aggregation, and no statistics inside the model |
 | Monte Carlo | A separate harness that resolves uncertain inputs, assigns run seeds, calls the model, and aggregates the runs |
@@ -112,7 +108,7 @@ The engine is built under five rules.
 
 **Rule 1 — Structure from physics, constants from independent sources.** A model term exists because a physical mechanism exists, not because it helps reproduce an expected number. Coefficients come from first principles, manufacturer data, or explicit engineering estimates.
 
-**Rule 2 — No fitting to expected outputs.** If the model predicts 5.5 litres per 100 km where a reviewer expects 7, the correct response is to examine the model and its inputs, not to multiply a coefficient until the number matches. Calibration against real data is a separate, documented activity. Version 0.1 has no calibration data and must say so.
+**Rule 2 — No fitting to expected outputs.** If the model predicts 5.5 litres per 100 km where a reviewer expects 7, the correct response is to examine the model and its inputs, not to multiply a coefficient until the number matches. Calibration against real data is a separate, documented activity. Version 1.0 has no calibration data and must say so.
 
 **Rule 3 — Every number is configurable.** The code contains only structural constants: unit conversions, the number of days per year, and mathematical constants. Every physical, behavioral, and economic parameter is read from a configuration file, can be overridden by the user, and is echoed in the output.
 
@@ -185,7 +181,7 @@ outcomes = { model( resolve( case, sample ), seed( sample ) ) for each sample }
 
 **Failure.** An unplanned event that disables or degrades the part before its planned replacement. A failure is both a cost and a risk event. Brake failure is excluded by scope.
 
-**TCO.** Cash operating cost over the horizon: fuel, scheduled maintenance, wear replacements, unplanned repairs, and consequential costs such as towing and downtime. Depreciation is reported separately because it is a change in asset value, not a cash outflow.
+**Total cost of ownership.** Cash operating cost over the horizon: fuel, scheduled maintenance, wear replacements, unplanned repairs, and consequential costs such as towing and downtime. Depreciation is reported separately because it is a change in asset value, not a cash outflow.
 
 **Horizon.** The number of simulated days, default 365. The start date determines which seasons the car experiences.
 
@@ -596,7 +592,7 @@ rearPadWear  = brakeEnergy * (1 - frontBrakeEnergyShare)
                * padWearCoefficient * temperatureFactor * padCompoundFactor
 ```
 
-The brake energy is expressed in megajoules. The nominal pad wear coefficient is 0.010 millimetres per megajoule, which corresponds to roughly 50,000 kilometres of mixed driving for a 10-millimetre front pad. The front share is nominally 0.72. Load transfer shifts more braking to the front under hard deceleration; version 0.1 keeps the share constant and records the simplification.
+The brake energy is expressed in megajoules. The nominal pad wear coefficient is 0.010 millimetres per megajoule, which corresponds to roughly 50,000 kilometres of mixed driving for a 10-millimetre front pad. The front share is nominally 0.72. Load transfer shifts more braking to the front under hard deceleration; version 1.0 keeps the share constant and records the simplification.
 
 #### 9.2.2 Disc wear
 
@@ -663,7 +659,7 @@ Pressure is reset to the specified value at every inspection or oil change, depe
 
 #### 9.3.3 Seasonal sets
 
-If seasonal tires are enabled, two sets are tracked: summer and winter. The active set changes on the configured mount months. Each set has its own tread depths and age. Winter compound wears faster on dry roads and slower in cold conditions; the net effect is captured by a compound factor.
+If seasonal tires are enabled, two sets are tracked: summer and winter. The active set changes on the configured mount months. Each set has its own tread depths and age. Winter compound wears faster on dry roads and slower in cold conditions; the net effect is captured by a compound factor. Seasonal sets are enabled by default in continental, alpine, and Nordic climates and disabled by default in maritime, Mediterranean, and arid climates; the setting is always configurable.
 
 #### 9.3.4 Rotation and replacement
 
@@ -936,7 +932,7 @@ There is no accident model and therefore no injury, liability, or body-damage ca
 
 ## 13. Monetary model
 
-### 13.1 TCO definition
+### 13.1 Total cost of ownership definition
 
 ```
 totalCostOfOwnership =
@@ -960,13 +956,17 @@ depreciation = distance * depreciationPerKilometre
                + horizonYears * depreciationPerYear
 ```
 
-It is excluded from TCO because it is not a cash outflow.
+It is excluded from total cost of ownership because it is not a cash outflow.
 
 Planned and unplanned costs are kept separate on purpose. If they were merged, a car that is simply due for pads and tires would look as expensive as a car that suffered a breakdown, and the model would effectively reward neglect. The report always shows both.
 
+Paint repair is reported on its own line and is excluded from total cost of ownership by default through `include_paint_repair_in_total_cost_of_ownership = false`, because its monetary contribution is small and the setting keeps totals comparable across cases.
+
+The default economics are euros at the Germany 2026 price level: fuel at 1.75 euro per litre and a regional price index of 1.0. Every value is configurable.
+
 ### 13.2 Reporting
 
-A single run reports one cost figure. The harness reports TCO as a distribution across runs:
+A single run reports one cost figure. The harness reports total cost of ownership as a distribution across runs:
 
 - mean,
 - median,
@@ -1143,7 +1143,7 @@ Scenario comparison reuses the run seeds, so the same weather and trip streams a
 
 ### 15.4 Sensitivity
 
-The aggregate includes a diagnostic ranking: which inputs, if measured or changed, would most reduce the uncertainty of total cost of ownership. The ranking is computed from the correlation between sampled inputs and the outcome, not from a separate global sensitivity analysis in version 0.1. A full Sobol analysis is a roadmap item.
+The aggregate includes a diagnostic ranking: which inputs, if measured or changed, would most reduce the uncertainty of total cost of ownership. The ranking is computed from the correlation between sampled inputs and the outcome, not from a separate global sensitivity analysis in version 1.0. A full Sobol analysis is a roadmap item.
 
 ---
 
@@ -1225,7 +1225,7 @@ tire_tread_millimetres = 0.5
 
 Every field has a documented default. A minimal configuration may specify only the case, the vehicle, and the user; the remainder falls back to defaults. The output echoes the fully resolved configuration.
 
-The TOML parser is `toml++`, a header-only library and the only third-party dependency besides Google Test. Parse errors report the file, line, and column. Unknown keys inside a known table produce a warning rather than being silently dropped; an unknown schema major version is an error.
+Parse errors report the file, line, and column. Unknown keys inside a known table produce a warning rather than being silently dropped; an unknown schema major version is an error.
 
 ### 16.2 Schema versioning
 
@@ -1257,7 +1257,7 @@ Validation for a single case cannot rely on a ground-truth outcome. It relies on
 
 ### 17.1 Structural tests
 
-- **Accounting identity**: the sum of cost components equals TCO.
+- **Accounting identity**: the sum of cost components equals total cost of ownership.
 - **Conservation**: cumulative distance equals the sum of trip distances.
 - **State bounds**: every health index stays within its admissible range.
 - **Reset consistency**: a replacement resets the installed state and leaves cumulative life unchanged.
@@ -1282,7 +1282,7 @@ A result outside these bounds indicates a modeling or input error. A result insi
 
 ### 17.3 External validation
 
-Real validation requires data that version 0.1 does not have:
+Real validation requires data that version 1.0 does not have:
 
 - service records with pad, disc, and tire replacements,
 - fuel logs,
@@ -1292,14 +1292,14 @@ Real validation requires data that version 0.1 does not have:
 
 The calibration plan is to fit only the coefficients that are identifiable from such data, and to leave structural choices untouched. Until then, every output carries a model-version and prior-provenance note.
 
-The relative importance of battery, brake, suspension, and age-dependent defects is anchored to the ADAC and TÜV reports in Appendix F. Those reports are sanity anchors and sources for relative priors, not calibration data for absolute rates.
+The relative importance of battery, brake, suspension, and age-dependent defects is anchored to the ADAC and TÜV reports in Appendix E. Those reports are sanity anchors and sources for relative priors, not calibration data for absolute rates.
 
 ---
 
 ## 18. Limitations
 
 1. **No trajectory simulation.** Gear selection, transient enrichment, thermal transients, and road grade are not modelled. Drives are summarized by sufficient statistics.
-2. **No brake failure.** By scope decision, brakes wear but do not fail.
+2. **No brake failure.** By scope, brakes wear but do not fail.
 3. **No accidents.** There is no crash, injury, liability, or body-damage cascade.
 4. **Paint is coarse.** It is a condition index with event jumps, not a surface-damage model, and it has little monetary weight.
 5. **Engine wear is latent.** It cannot be measured directly. The model output is a model-derived index, not an observation. Oil analysis would be the only external proxy.
@@ -1317,11 +1317,11 @@ These limitations are deliberate. Each one is a candidate for a later version, n
 
 | Version | Content |
 |---|---|
-| 0.1 | This model: single case, gasoline, one year, TOML and CSV output |
-| 0.2 | Historical weather replay from a CSV; calibration harness |
-| 0.3 | Global sensitivity analysis; uncertainty decomposition in the harness aggregate |
-| 0.4 | Additional components and regional inspection regimes |
-| 0.5 | Hybrid and electric powertrains |
+| 1.0 | This model: single case, gasoline, one year, TOML and CSV output |
+| 1.1 | Historical weather replay from a CSV; calibration harness |
+| 1.2 | Global sensitivity analysis; uncertainty decomposition in the harness aggregate |
+| 1.3 | Additional components and regional inspection regimes |
+| 1.4 | Hybrid and electric powertrains |
 | Later | Accident cascade, brake failure, market value model |
 
 ---
@@ -1552,26 +1552,7 @@ Rationale: driving happens before maintenance, maintenance happens before failur
 
 ---
 
-## Appendix E — Resolved design decisions
-
-These were the open questions in the first draft. They are now closed for version 0.3.
-
-| Topic | Decision | Rationale |
-|---|---|---|
-| Model boundary | The model simulates one car for one run and contains no Monte Carlo. A separate harness resolves uncertain inputs, assigns run seeds, calls the model, and aggregates the runs. | Keeps the model a pure, reproducible function of its inputs and lets sampling and statistics evolve independently of the physics. |
-| Route classes | Keep four configurable classes: city, mixed, rural, highway. No separate average-speed input. | Distance, class, style, and weather already determine the speed distribution. An additional speed input would be redundant and hard to interpret. |
-| Seasonal tires | Default on for continental, alpine, and Nordic zones; default off for maritime, Mediterranean, and arid zones. Always overridable. | Matches common practice without forcing seasonal tires on every case. |
-| Paint repair cost | Reported as a separate line, excluded from TCO by default through `include_paint_repair_in_tco = false`. | Keeps TCO comparable across cases and reflects the low value impact of cosmetic paint damage. |
-| Default economics | Euro, Germany, 2026 price level. Fuel 1.75 euro per litre, regional price index 1.0. | A single explicit baseline is easier to audit than a currency-neutral model. The configuration can override every value. |
-| Failure priors | Relative weights anchored to the ADAC and TÜV reports in Appendix F. Absolute annual rates remain literature and engineering priors. | Avoids false precision while keeping the failure model plausible and documented. |
-| Horizon | Any horizon from one day upward. Default 365 days. | The simulation loop is horizon-agnostic; multi-year runs cost only compute time. |
-| Output format | Run output and harness aggregate as TOML; CSV tables for per-run and per-month data. No JSON. | TOML is readable and has a mature header-only parser; CSV remains the right format for large run tables. |
-
-The decisions do not remove the limitations listed in Section 18. In particular, absolute failure rates remain priors until service and repair data are available.
-
----
-
-## Appendix F — Sources and calibration anchors
+## Appendix E — Sources and calibration anchors
 
 The model is not calibrated to these sources. They inform relative priors and sanity anchors, not absolute predictions.
 
@@ -1584,14 +1565,6 @@ The model is not calibrated to these sources. They inform relative priors and sa
    <https://www.tuev-verband.de/pressemitteilungen/tuev-report-2026>
    Accessed 2026-10-22.
    Used for: 21.5 percent of inspected cars had significant or dangerous defects, 12.3 percent had minor defects, and 66.1 percent were defect-free. The average German car was 10.6 years old. Defect rates rise with vehicle age, and brakes, springs, and dampers are among the most frequent defects. This supports the age-dependent hazard structure and the inclusion of suspension and brakes in the wear model.
-
-3. **toml++ 3.4.0**, TOML parser and serializer.
-   <https://github.com/marzer/tomlplusplus>
-   Implementation dependency, not a model source.
-
-4. **Google Test 1.18.0**, test framework.
-   <https://github.com/google/googletest>
-   Implementation dependency, not a model source.
 
 ---
 
