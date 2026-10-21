@@ -1,0 +1,3 @@
+# Normalize line endings: LF in the repo and working tree.
+# README.md is UTF-16LE; Git's binary detection keeps it untouched.
+* text=auto eol=lf
