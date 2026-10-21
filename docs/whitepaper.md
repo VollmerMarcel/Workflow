@@ -4,20 +4,21 @@
 
 | | |
 |---|---|
-| Document version | 0.2 — draft for review |
+| Document version | 0.3 — draft for review |
 | Date | 2026-10-22 |
-| Changes | TOML replaces JSON for configuration and summary output; design decisions resolved; calibration anchors added |
+| Changes | Model and Monte Carlo harness separated: the model produces one run for one car; the harness aggregates runs |
 | Status | Model definition, no implementation yet |
 | Scope | One specific car, one specific user, one specific location |
-| Primary output | Distribution of total cost of ownership, part wear, failures |
+| Model output | One run: part states, events, and costs for a single car |
+| Harness output | Distribution of total cost of ownership, part wear, and failures across runs |
 
 ---
 
 ## Executive summary
 
-This document specifies a simulation engine that estimates how a specific gasoline car will wear and what it will cost over a horizon of one year. The car, the driver, and the location are fixed; the engine samples the weather, the trips, the timing of rare events, and the uncertainty in the car's present condition. It reports a distribution, not a point estimate.
+This document specifies a simulation model that estimates how a specific gasoline car will wear and what it will cost over a horizon of one year. The car, the driver, and the location are fixed. A model run simulates one car over one horizon and produces one outcome: the state of every part, the events that occurred, and the costs that followed. The model contains no Monte Carlo loop and computes no statistics. Monte Carlo is performed by a separate harness that calls the model repeatedly with different resolved inputs and run seeds, and aggregates the runs. The harness is a consumer of the model, not part of it.
 
-The model has four layers. A climate process generates weather. A trip generator turns the driver's weekly rhythm into trips represented by a handful of sufficient statistics. A set of component models turns those trips into wear, replacements, and failures. An accounting layer turns events into total cost of ownership. Every numeric parameter is read from a configuration file, and every result is written as TOML plus CSV.
+The model has four layers. A climate process generates weather. A trip generator turns the driver's weekly rhythm into trips represented by a handful of sufficient statistics. A set of component models turns those trips into wear, replacements, and failures. An accounting layer turns events into total cost of ownership. Every numeric parameter is read from a configuration file, and a run is written as TOML plus CSV.
 
 The document is deliberately explicit about what is not modelled: brake failure, accidents, hybrids, and a detailed paint-surface model. It is equally explicit that the constants are engineering priors, not calibrated truths, and that no coefficient may be tuned to reproduce an expected output.
 
@@ -39,7 +40,7 @@ The document is deliberately explicit about what is not modelled: brake failure,
 12. [Failure model](#12-failure-model)
 13. [Monetary model](#13-monetary-model)
 14. [Output contract](#14-output-contract)
-15. [Monte Carlo design](#15-monte-carlo-design)
+15. [Monte Carlo harness](#15-monte-carlo-harness)
 16. [Parameterization](#16-parameterization)
 17. [Validation](#17-validation)
 18. [Limitations](#18-limitations)
@@ -59,17 +60,17 @@ The engine answers one question:
 
 > Given car X, user Y, and location Z, how does the car perform over the next year, and what does that cost?
 
-It produces a **predictive distribution**, not a single number:
+It produces, for one run, the outcome of one car over one horizon:
 
 - wear indicators for every replaceable part in the model,
-- the probability and expected timing of part replacement,
-- the probability of unplanned failure per part,
-- total cost of ownership (TCO) and its components,
+- replacement events and their dates,
+- failure events,
+- fuel consumption and the other cost components,
 - the monthly shape of cost and wear.
 
 The engine is a decision aid. It is not a warranty, a residual-value appraisal, or a substitute for an inspection.
 
-The model is deliberately **case-based**: the car, the user, and the location are fixed inputs. There is no population of drivers and no fleet aggregation. The Monte Carlo simulation explores the uncertainty *within that one case* — weather realizations, trip realizations, event timing, and uncertainty about the car's current condition.
+The model is deliberately **case-based**: the car, the user, and the location are fixed inputs. There is no population of drivers and no fleet aggregation. A run is one stochastic realization of that case. The predictive distribution is produced by the Monte Carlo harness, which varies the uncertain inputs and the run seed and aggregates the runs.
 
 ---
 
@@ -89,14 +90,19 @@ These decisions are binding for version 0.1.
 | Primary monetary metric | Total cost of ownership (cash operating cost) |
 | Depreciation | Reported separately, excluded from TCO |
 | Parameter source | Every numeric input comes from a TOML configuration file |
-| Output | TOML summary plus CSV per-replication data |
+| Model boundary | One run simulates one car for one horizon; no replication loop, no aggregation, and no statistics inside the model |
+| Monte Carlo | A separate harness that resolves uncertain inputs, assigns run seeds, calls the model, and aggregates the runs |
+| Model output | One run: part states, an event log, and cost components, as TOML plus CSV |
+| Harness output | Aggregate distribution as TOML, plus one CSV row per run |
 | Calibration | No tuning to expected outputs; constants are priors |
 
-Two consequences deserve emphasis.
+Three consequences deserve emphasis.
 
 **Brake failure is out of scope.** Brake pads and discs are consumables. They wear, reach a replacement threshold, and are replaced. No safety-critical brake failure event is sampled.
 
 **Paint does not carry a large cost tail.** Paint is modelled as a slowly accumulating condition index with stone chips, hail, parking dings, and rust onset. Its monetary contribution is small by design. This is a scope choice, not a claim that paint is irrelevant to owners.
+
+**The model and the harness are separate.** The model is a single stochastic simulation of one car. Monte Carlo is a way of using the model, not a feature inside it. A run is reproducible from its resolved inputs and its run seed. The harness may change its sampling strategy or its statistics without touching the physics.
 
 ---
 
@@ -112,7 +118,7 @@ The engine is built under five rules.
 
 **Rule 4 — Prefer few, interpretable parameters.** A parameter that cannot be explained in one sentence does not belong in the model. Where two formulations fit equally well, the one with fewer parameters wins.
 
-**Rule 5 — Report uncertainty honestly.** The output is a distribution with explicit assumptions. It is not a point prediction with decorative decimals.
+**Rule 5 — Report uncertainty honestly.** A run is one outcome with explicit inputs. The harness reports the distribution across runs with explicit assumptions. Neither is a point prediction with decorative decimals.
 
 ### 3.1 Parameter provenance
 
@@ -148,24 +154,27 @@ case = ( vehicle, currentState, user, location, maintenancePolicy, economics, st
 - **Economics**: fuel price, regional price index, part and labor costs, downtime value.
 - **Start date**: the calendar date on which the horizon begins.
 
-### 4.2 The output
+### 4.2 The model output
 
-For replication *r* of *N*, the simulator draws a realization
-
-```
-realization = ( weatherPath, tripRealization, eventTimes, latentState, parameterDraw )
-outcome_r  = simulate( case, realization )
-```
-
-The result is the empirical predictive distribution of the outcome vector:
+A run maps one resolved case and one run seed to one outcome:
 
 ```
+run = model( resolvedCase, runSeed )
+
 outcome = ( part states at horizon,
             replacement events and dates,
             failure events,
             fuel consumption,
             cost components,
             monthly timeline )
+```
+
+The resolved case is the case with every uncertain entry replaced by a concrete value, including the car's latent current state and its frailty factor. The run seed drives the weather, the trip realization, and the timing of rare events inside that run.
+
+A run is one realization, not a distribution. The predictive distribution over outcomes is produced by the Monte Carlo harness, which resolves the uncertain inputs, assigns a run seed to each run, calls the model, and aggregates:
+
+```
+outcomes = { model( resolve( case, sample ), seed( sample ) ) for each sample }
 ```
 
 ### 4.3 Definitions
@@ -184,11 +193,15 @@ outcome = ( part states at horizon,
 
 ## 5. Simulation architecture
 
-### 5.1 The three-level loop
+### 5.1 The run loop
+
+A run is one simulation of one car over one horizon. It has no replication loop and no aggregation step; those belong to the harness.
+
+The model, for one run:
 
 ```
-for each replication r:
-    draw latent current state and car-level frailty
+run( resolvedCase, runSeed ):
+    initialize state from resolvedCase
     for each day d:
         generate weather for day d
         apply seasonal tire swap if scheduled
@@ -202,9 +215,21 @@ for each replication r:
         apply threshold replacements
         sample failure events
         record monthly snapshot
-    finalize replication
-aggregate replications
+    return the run result
 ```
+
+The harness, for many runs (Section 15):
+
+```
+monteCarlo( case, numberOfRuns, masterSeed ):
+    for runIndex in 1 .. numberOfRuns:
+        sampleSeed  = hash( masterSeed, runIndex, "run" )
+        resolvedCase = resolve( case, masterSeed, runIndex )
+        results[ runIndex ] = run( resolvedCase, sampleSeed )
+    aggregate( results )
+```
+
+`resolve` replaces every uncertain case entry — the latent current state, the car-level frailty, and any sampled parameter prior — with a concrete value, so the model itself always receives a fully determined case.
 
 The day is the smallest time step. Maintenance and failures are resolved at the end of the day. This is an explicit approximation: a failure that would occur during a trip is assigned to the end of that day. The horizon is short and the number of trips per day is small, so the approximation has no material effect on annual cost or wear.
 
@@ -253,20 +278,20 @@ Every subsystem model below depends only on these statistics and on the current 
 
 ### 6.1 Two kinds of uncertainty
 
-The output distribution mixes two fundamentally different things.
+A set of runs mixes two fundamentally different things. The model itself does not separate them; the harness does, and it reports the decomposition.
 
 | Layer | Source | Reduced by |
 |---|---|---|
-| Aleatory | Weather realization, trip lengths, event times | Nothing |
+| Aleatory | Weather realization, trip lengths, event times within a run | Nothing |
 | Epistemic | Unknown current state, uncertain hazard priors, car-level frailty | Measurement, data |
 
-The engine keeps them separable. Epistemic sampling can be switched off to obtain the aleatory-only distribution, and the report can show the variance decomposition:
+The harness keeps them separable. Epistemic sampling can be switched off to obtain the aleatory-only distribution, and the aggregate can show the variance decomposition:
 
 ```
-totalVariance = mean( withinReplicationVariance ) + variance( meanOutcomePerReplication )
+totalVariance = meanOverSamples( withinSampleVariance ) + varianceOverSamples( meanOutcomePerSample )
 ```
 
-The first term is aleatory, the second is epistemic. This tells the user whether the answer is limited by luck or by missing information.
+Here a sample is one resolved case with one set of epistemic draws, and the runs sharing that sample differ only in their run seed. The first term is aleatory, the second is epistemic. This tells the user whether the answer is limited by luck or by missing information.
 
 ### 6.2 Where the variance actually is
 
@@ -274,29 +299,29 @@ A one-year horizon contains roughly 800 to 1200 trips. Independent per-trip nois
 
 The variance must therefore be placed where it physically lives:
 
-- **Weather path**: one realization per replication, persistent across the year.
+- **Weather path**: one realization per run, persistent across the year.
 - **Trip realization**: Poisson and Bernoulli counts and log-normal distances, persistent within the year.
 - **Event times**: Poisson chip, hail, and failure events.
 - **Current state**: unknown pad thickness, oil age, battery health.
-- **Car-level frailty**: one multiplicative factor per replication that makes some cars systematically less reliable.
+- **Car-level frailty**: one multiplicative factor per run that makes some cars systematically less reliable.
 
 This is the single most important design rule in the uncertainty model.
 
 ### 6.3 Frailty
 
-Each replication draws a frailty factor:
+The harness draws a frailty factor for each run and passes it into the resolved case:
 
 ```
 frailty = exp( normal( 0, sigmaFrailty ) )
 ```
 
-The factor multiplies every random failure hazard for that replication. It produces clustering: a car that suffers one unexpected failure is more likely to suffer another. Without frailty, failures are unrealistically independent and the cost tail is too thin.
+The factor multiplies every random failure hazard for that run. It produces clustering: a car that suffers one unexpected failure is more likely to suffer another. Without frailty, failures are unrealistically independent and the cost tail is too thin.
 
 `sigmaFrailty` is a configurable prior, nominally 0.45.
 
 ### 6.4 Uncertainty of the current state
 
-The car's condition at the start is rarely known exactly. Every state entry has a nominal value and a standard deviation in the configuration. A value of zero means "known exactly". A large value means "unknown, use the prior".
+The car's condition at the start is rarely known exactly. Every state entry has a nominal value and a standard deviation in the configuration. A value of zero means "known exactly". A large value means "unknown, use the prior". These are inputs to the harness; the model receives the resulting concrete state.
 
 Sampling is truncated to the physically admissible range:
 
@@ -308,15 +333,17 @@ This matters because one year of pad wear is roughly 1 to 3 millimetres, while t
 
 ### 6.5 Reproducibility
 
-Each replication uses independent random streams derived from the case seed:
+Each run uses independent random streams derived from its run seed:
 
 ```
-streamSeed = hash( caseSeed, replicationIndex, streamName )
+streamSeed = hash( runSeed, streamName )
 ```
 
-Streams exist for weather, trips, state sampling, failures, and costs. The same seed produces the same output, byte for byte, on the same platform. The seed is printed in the report.
+Streams exist for weather, trips, failure events, and costs. The same resolved case and run seed produce the same output, byte for byte, on the same platform. The run seed is printed in the run output.
 
-Independent streams also enable common random numbers: when comparing two scenarios, the same weather and trip streams are reused, so differences are attributable to the scenario rather than to sampling noise.
+The harness derives run seeds from its master seed and run index, so an entire study is reproducible from the case, the master seed, and the number of runs.
+
+Independent streams also enable common random numbers: when comparing two scenarios, the same run seeds are reused, so the same weather and trip streams drive both scenarios and differences are attributable to the scenario rather than to sampling noise.
 
 ---
 
@@ -877,7 +904,7 @@ probabilityOfFailure = 1 - exp(-hazardDaily)
 
 The wear index is the normalized 0-to-1 wear state, except for the engine, where it is equivalent kilometres divided by design life.
 
-A failure event draws an installed repair cost from a log-normal distribution around the configured base cost, records downtime, and resets the part state. Failures are competing risks, not independent per-part coin flips: each part can fail at most once per replication in the simplest configuration, with the option to allow multiple failures for cheap components.
+A failure event draws an installed repair cost from a log-normal distribution around the configured base cost, records downtime, and resets the part state. Failures are competing risks, not independent per-part coin flips: each part can fail at most once per run in the simplest configuration, with the option to allow multiple failures for cheap components.
 
 ### 12.2 Failure modes in scope
 
@@ -939,7 +966,7 @@ Planned and unplanned costs are kept separate on purpose. If they were merged, a
 
 ### 13.2 Reporting
 
-TCO is reported as a distribution:
+A single run reports one cost figure. The harness reports TCO as a distribution across runs:
 
 - mean,
 - median,
@@ -954,46 +981,100 @@ The breakdown is reported by category and by month. The monthly timeline answers
 
 ## 14. Output contract
 
-### 14.1 TOML summary
+The output contract has two levels. The **model** produces one run for one car. The **Monte Carlo harness** described in Section 15 consumes many runs and produces an aggregate. The two levels have separate documents.
 
-The primary output is a single TOML document. Keys are snake_case, dates use the native TOML date type, and repeated records use arrays of tables.
+### 14.1 Model output: one run
+
+A run is a single simulation of one car over one horizon with one run seed. It is serialized as one TOML document. A run contains one outcome, not a distribution.
 
 ```toml
 schema_version = "1.0"
 
-[case]
-name = "2019-golf-1.5-tsi"
+[run]
+case_name = "2019-golf-1.5-tsi"
 start_date = 2026-10-01
 horizon_days = 365
+run_seed = 918273645
 
-[sampling]
-replications = 20000
-random_seed = 20261021
-epistemic_uncertainty_sampled = true
+[run.totals]
+distance_kilometres = 12430.0
+fuel_litres = 806.2
+fuel_consumption_litres_per_100_kilometres = 6.49
+total_cost_of_ownership_euros = 2087.4
+depreciation_euros = 1345.8
 
-[aggregates.distance_kilometres]
+[run.cost_breakdown]
+fuel_euros = 1410.9
+scheduled_maintenance_euros = 200.0
+wear_replacement_euros = 265.0
+unplanned_repair_euros = 161.5
+consequential_euros = 50.0
+
+[run.final_state]
+engine_wear_equivalent_kilometres = 9720.0
+oil_degradation = 0.98
+oil_level_fraction = 0.93
+front_pad_millimetres = 8.1
+rear_pad_millimetres = 6.9
+front_disc_millimetres = 24.2
+rear_disc_millimetres = 8.8
+tire_tread_millimetres = [4.1, 4.1, 3.7, 3.7]
+battery_state_of_health = 0.83
+suspension_wear_index = 0.24
+clutch_wear_index = 0.18
+exhaust_corrosion_index = 0.29
+catalyst_degradation_index = 0.21
+paint_damage_index = 0.34
+windshield_chip_count = 1
+rust_started = false
+
+[[run.events]]
+day = 187
+kind = "scheduled_maintenance"
+item = "engine_oil_and_filter"
+cost_euros = 110.0
+
+[[run.events]]
+day = 244
+kind = "failure"
+item = "battery"
+cost_euros = 161.5
+
+[[run.monthly]]
+month = 1
+cost_euros = 178.4
+front_pad_millimetres = 8.8
+tire_tread_millimetres = 4.9
+```
+
+A single run has no percentiles, no means, and no probabilities. Those are properties of a set of runs, not of one run. Optional content is omitted rather than encoded with a sentinel: an event that did not occur is simply absent from `[run.events]`.
+
+### 14.2 Model output: run tables
+
+A run also produces CSV tables for detailed analysis:
+
+- `run_events.csv`, one row per event: day, kind, item, cost.
+- `run_monthly.csv`, one row per month: cost and the principal wear states.
+- `run_trips.csv`, optional, one row per trip, when trip-level analysis is requested.
+
+### 14.3 Harness output: aggregate distribution
+
+The Monte Carlo harness aggregates many runs. It writes one aggregate TOML document and one CSV row per run.
+
+```toml
+[aggregate.distance_kilometres]
 mean = 12450.0
 p10 = 10800.0
 p50 = 12400.0
 p90 = 14100.0
 
-[aggregates.fuel_litres]
-mean = 812.4
-p10 = 705.0
-p50 = 810.0
-p90 = 921.0
-
-[aggregates.total_cost_of_ownership_euros]
+[aggregate.total_cost_of_ownership_euros]
 mean = 2140.0
 p10 = 1880.0
 p50 = 2120.0
 p90 = 2410.0
 p95 = 2580.0
 tail_average_95 = 2720.0
-
-[cost_breakdown.fuel_euros]
-mean = 1421.0
-p50 = 1418.0
 
 [[part_prognoses]]
 id = "front_brake_pads"
@@ -1005,11 +1086,6 @@ replacement_probability = 0.12
 failure_probability = 0.0
 expected_cost_euros = 11.0
 
-[part_prognoses.state_now]
-p10 = 7.5
-p50 = 9.0
-p90 = 10.5
-
 [part_prognoses.state_at_horizon]
 p10 = 4.8
 p50 = 6.1
@@ -1019,27 +1095,12 @@ p90 = 7.4
 id = "battery"
 probability_at_least_one = 0.04
 expected_count = 0.04
-
-[[monthly_timeline]]
-month = 1
-cost_euros_p50 = 178.0
-cost_euros_p90 = 240.0
-front_pad_millimetres_p50 = 8.8
-tire_tread_millimetres_p50 = 4.9
 ```
 
-Percentile tables contain at least `mean`, `p10`, `p50`, and `p90`. Cost tables additionally contain `p95` and `tail_average_95`. The `[effective_configuration]` table echoes the fully resolved configuration, so every result can be audited and reproduced.
-
-Optional fields are omitted rather than encoded with a sentinel. For example, a replacement day is absent when the part is never replaced in the replication set. The TOML summary is the human- and tool-friendly digest; the CSV files are the canonical per-replication data.
-
-### 14.2 CSV per replication
-
-`replications.csv` contains one row per replication with scalar outputs. This is the file for downstream analysis, plotting, and custom statistics.
-
-Columns include:
+Percentile tables contain at least `mean`, `p10`, `p50`, and `p90`. Cost tables additionally contain `p95` and `tail_average_95`. The per-run table `runs.csv` contains one row per run with the scalar outputs. Its columns include:
 
 ```
-replication, random_seed,
+run_index, run_seed,
 distance_kilometres, fuel_litres, fuel_consumption_litres_per_100_kilometres,
 engine_wear_equivalent_kilometres, oil_degradation, oil_level_fraction,
 front_pad_millimetres, rear_pad_millimetres, front_disc_millimetres, rear_disc_millimetres,
@@ -1053,36 +1114,36 @@ unplanned_repair_euros, consequential_euros, total_cost_of_ownership_euros,
 failure_count, downtime_days, depreciation_euros
 ```
 
-`monthly.csv` contains one row per replication and month with the monthly cost and the principal wear states, if enabled.
+### 14.4 Determinism
 
-### 14.3 Determinism
-
-The same case and the same seed produce the same TOML and CSV within the same build and platform. Floating-point formatting is fixed. The seed is part of the output, so a result can always be reproduced.
+A run is reproducible from its resolved case and its run seed. The harness is reproducible from the case with its uncertainties, the master seed, and the number of runs. Floating-point formatting is fixed, and every seed is part of the output.
 
 ---
 
-## 15. Monte Carlo design
+## 15. Monte Carlo harness
 
-### 15.1 Number of replications
+The harness is not part of the model. It is a consumer of the model that turns many runs into a predictive distribution. For each run it resolves the uncertain inputs of the case into concrete values, assigns a run seed, calls the model once, and collects the run result. After the last run it aggregates.
 
-The default is 20,000 replications. A one-year simulation is cheap: roughly one thousand trips per replication, so twenty thousand replications is on the order of twenty million trip updates, which runs in seconds on a modern desktop.
+### 15.1 Number of runs
 
-For stable estimates of rare events and tail costs, 100,000 replications are recommended. A failure probability of 5% then produces about 5,000 events, giving a relative standard error of roughly 1.4%.
+The default is 20,000 runs. A one-year run is cheap: roughly one thousand trips, so twenty thousand runs is on the order of twenty million trip updates, which runs in seconds on a modern desktop.
+
+For stable estimates of rare events and tail costs, 100,000 runs are recommended. A failure probability of 5% then produces about 5,000 events, giving a relative standard error of roughly 1.4%.
 
 ### 15.2 Statistics
 
 - Percentiles are computed with linear interpolation between order statistics.
 - The 95% tail average is the mean of the largest 5% of outcomes.
 - Correlations between principal outputs are reported because they matter: a car with high fuel consumption also tends to have high tire and brake wear, since all three share driving style.
-- The variance decomposition of section 6.1 is reported when epistemic sampling is enabled.
+- The variance decomposition of Section 6.1 is reported when epistemic sampling is enabled.
 
 ### 15.3 Common random numbers
 
-Scenario comparison reuses the weather and trip streams. If the user asks "what if this owner drove 10% less", the difference is not contaminated by a different weather year. This is a variance-reduction technique and a usability feature.
+Scenario comparison reuses the run seeds, so the same weather and trip streams are used across scenarios. If the user asks "what if this owner drove 10% less", the difference is not contaminated by a different weather year. This is a variance-reduction technique and a usability feature.
 
 ### 15.4 Sensitivity
 
-The report includes a diagnostic ranking: which inputs, if measured or changed, would most reduce the uncertainty of TCO. The ranking is computed from the correlation between sampled inputs and the outcome, not from a separate global sensitivity analysis in version 0.1. A full Sobol analysis is a roadmap item.
+The aggregate includes a diagnostic ranking: which inputs, if measured or changed, would most reduce the uncertainty of total cost of ownership. The ranking is computed from the correlation between sampled inputs and the outcome, not from a separate global sensitivity analysis in version 0.1. A full Sobol analysis is a roadmap item.
 
 ---
 
@@ -1095,7 +1156,8 @@ The configuration file is the single source of truth. It is a TOML document. Key
 | Section | Contents |
 |---|---|
 | `[case]` | Name, start date, horizon |
-| `[sampling]` | Replications, random seed, epistemic sampling toggle |
+| `[run]` | Run seed for a single run |
+| `[monte_carlo]` | Number of runs, master seed, epistemic sampling toggle (harness only) |
 | `[output]` | Output directory and CSV toggles |
 | `[vehicle]` | Mass, drag area, engine, transmission, drivetrain, component specifications |
 | `[current_state]` | Measured condition; `[current_state.uncertainty]` holds the standard deviations |
@@ -1118,15 +1180,18 @@ name = "2019-golf-1.5-tsi"
 start_date = 2026-10-01
 horizon_days = 365
 
-[sampling]
-replications = 20000
-random_seed = 20261021
+[run]
+run_seed = 918273645
+
+[monte_carlo]
+number_of_runs = 20000
+master_seed = 20261021
 sample_epistemic_uncertainty = true
 
 [output]
 directory = "output"
-write_per_replication_csv = true
-write_monthly_csv = false
+write_run_tables = true
+write_runs_csv = true
 
 [vehicle]
 mass_kilograms = 1450.0
@@ -1176,7 +1241,7 @@ Before simulation, the engine checks:
 - non-negative costs and distances,
 - a start date that parses,
 - a climate zone that exists or a complete override,
-- at least one replication.
+- a positive number of runs for the harness and a non-empty horizon for the model.
 
 Invalid input produces a clear error with the offending key and value, not a silent fallback.
 
@@ -1198,7 +1263,8 @@ Validation for a single case cannot rely on a ground-truth outcome. It relies on
 - **Reset consistency**: a replacement resets the installed state and leaves cumulative life unchanged.
 - **Monotonicity**: more aggressive driving increases every wear output; more highway distance decreases brake wear per kilometre; colder weather increases cold-start wear and battery failure probability; more salt increases corrosion and paint damage.
 - **Weather monotonicity**: a colder year produces more engine wear and more battery failures than a warmer year with the same trips.
-- **Determinism**: the same seed produces identical output.
+- **Determinism**: the same resolved case and run seed produce identical output.
+- **Model purity**: a run takes a resolved case and a run seed, resolves no input uncertainty, and returns no aggregate statistics.
 
 ### 17.2 Sanity bounds
 
@@ -1253,7 +1319,7 @@ These limitations are deliberate. Each one is a candidate for a later version, n
 |---|---|
 | 0.1 | This model: single case, gasoline, one year, TOML and CSV output |
 | 0.2 | Historical weather replay from a CSV; calibration harness |
-| 0.3 | Global sensitivity analysis; uncertainty decomposition in the report |
+| 0.3 | Global sensitivity analysis; uncertainty decomposition in the harness aggregate |
 | 0.4 | Additional components and regional inspection regimes |
 | 0.5 | Hybrid and electric powertrains |
 | Later | Accident cascade, brake failure, market value model |
@@ -1441,11 +1507,10 @@ Engine check: 6,250 km plus 250 cold starts at 5 equivalent kilometres each give
 
 ## Appendix D — Event ordering
 
-```
-for each replication:
-    draw currentState from its uncertainty
-    draw frailty from log-normal
+The model, for one run:
 
+```
+run( resolvedCase, runSeed ):
     for each day from 1 to horizon:
         weather = generateWeather(day)
         if seasonalTireSwapScheduled(day): swapTireSet()
@@ -1467,8 +1532,20 @@ for each replication:
         applyThresholdReplacements(state, day)
         sampleFailures(state, day, frailty)
         recordMonthlySnapshot(state, day)
-    finalizeReplication()
-aggregateReplications()
+    return the run result
+```
+
+The resolved case already carries the concrete current state and the frailty factor; the model does not draw them.
+
+The harness, for many runs:
+
+```
+monteCarlo( case, numberOfRuns, masterSeed ):
+    for runIndex in 1 .. numberOfRuns:
+        resolvedCase = resolve( case, masterSeed, runIndex )   # samples current state, frailty, priors
+        runSeed      = hash( masterSeed, runIndex, "run" )
+        results[ runIndex ] = run( resolvedCase, runSeed )
+    aggregate( results )
 ```
 
 Rationale: driving happens before maintenance, maintenance happens before failures, and failures are resolved at the end of the day. This ordering is deterministic and testable. It is also an approximation: a failure that would occur mid-trip is assigned to the end of the day. For a one-year horizon this is immaterial for cost and wear, and it avoids a nested intra-trip event loop.
@@ -1477,17 +1554,18 @@ Rationale: driving happens before maintenance, maintenance happens before failur
 
 ## Appendix E — Resolved design decisions
 
-These were the open questions in the first draft. They are now closed for version 0.1.
+These were the open questions in the first draft. They are now closed for version 0.3.
 
 | Topic | Decision | Rationale |
 |---|---|---|
+| Model boundary | The model simulates one car for one run and contains no Monte Carlo. A separate harness resolves uncertain inputs, assigns run seeds, calls the model, and aggregates the runs. | Keeps the model a pure, reproducible function of its inputs and lets sampling and statistics evolve independently of the physics. |
 | Route classes | Keep four configurable classes: city, mixed, rural, highway. No separate average-speed input. | Distance, class, style, and weather already determine the speed distribution. An additional speed input would be redundant and hard to interpret. |
 | Seasonal tires | Default on for continental, alpine, and Nordic zones; default off for maritime, Mediterranean, and arid zones. Always overridable. | Matches common practice without forcing seasonal tires on every case. |
 | Paint repair cost | Reported as a separate line, excluded from TCO by default through `include_paint_repair_in_tco = false`. | Keeps TCO comparable across cases and reflects the low value impact of cosmetic paint damage. |
 | Default economics | Euro, Germany, 2026 price level. Fuel 1.75 euro per litre, regional price index 1.0. | A single explicit baseline is easier to audit than a currency-neutral model. The configuration can override every value. |
 | Failure priors | Relative weights anchored to the ADAC and TÜV reports in Appendix F. Absolute annual rates remain literature and engineering priors. | Avoids false precision while keeping the failure model plausible and documented. |
 | Horizon | Any horizon from one day upward. Default 365 days. | The simulation loop is horizon-agnostic; multi-year runs cost only compute time. |
-| Output format | TOML summary plus CSV per replication and per month. No JSON. | TOML is readable and has a mature header-only parser; CSV remains the right format for large per-replication tables. |
+| Output format | Run output and harness aggregate as TOML; CSV tables for per-run and per-month data. No JSON. | TOML is readable and has a mature header-only parser; CSV remains the right format for large run tables. |
 
 The decisions do not remove the limitations listed in Section 18. In particular, absolute failure rates remain priors until service and repair data are available.
 
