@@ -4,8 +4,9 @@
 
 | | |
 |---|---|
-| Document version | 0.1 — draft for review |
-| Date | 2026-10-21 |
+| Document version | 0.2 — draft for review |
+| Date | 2026-10-22 |
+| Changes | TOML replaces JSON for configuration and summary output; design decisions resolved; calibration anchors added |
 | Status | Model definition, no implementation yet |
 | Scope | One specific car, one specific user, one specific location |
 | Primary output | Distribution of total cost of ownership, part wear, failures |
@@ -16,7 +17,7 @@
 
 This document specifies a simulation engine that estimates how a specific gasoline car will wear and what it will cost over a horizon of one year. The car, the driver, and the location are fixed; the engine samples the weather, the trips, the timing of rare events, and the uncertainty in the car's present condition. It reports a distribution, not a point estimate.
 
-The model has four layers. A climate process generates weather. A trip generator turns the driver's weekly rhythm into trips represented by a handful of sufficient statistics. A set of component models turns those trips into wear, replacements, and failures. An accounting layer turns events into total cost of ownership. Every numeric parameter is read from a configuration file, and every result is written as JSON plus CSV.
+The model has four layers. A climate process generates weather. A trip generator turns the driver's weekly rhythm into trips represented by a handful of sufficient statistics. A set of component models turns those trips into wear, replacements, and failures. An accounting layer turns events into total cost of ownership. Every numeric parameter is read from a configuration file, and every result is written as TOML plus CSV.
 
 The document is deliberately explicit about what is not modelled: brake failure, accidents, hybrids, and a detailed paint-surface model. It is equally explicit that the constants are engineering priors, not calibrated truths, and that no coefficient may be tuned to reproduce an expected output.
 
@@ -47,7 +48,8 @@ The document is deliberately explicit about what is not modelled: brake failure,
 21. [Appendix B — Model constants](#appendix-b--model-constants)
 22. [Appendix C — Worked example](#appendix-c--worked-example)
 23. [Appendix D — Event ordering](#appendix-d--event-ordering)
-24. [Appendix E — Open questions for review](#appendix-e--open-questions-for-review)
+24. [Appendix E — Resolved design decisions](#appendix-e--resolved-design-decisions)
+25. [Appendix F — Sources and calibration anchors](#appendix-f--sources-and-calibration-anchors)
 
 ---
 
@@ -86,8 +88,8 @@ These decisions are binding for version 0.1.
 | Paint | Condition indicator only; low monetary weight; no large value tail |
 | Primary monetary metric | Total cost of ownership (cash operating cost) |
 | Depreciation | Reported separately, excluded from TCO |
-| Parameter source | Every numeric input comes from a configuration file |
-| Output | JSON summary plus CSV per-replication data |
+| Parameter source | Every numeric input comes from a TOML configuration file |
+| Output | TOML summary plus CSV per-replication data |
 | Calibration | No tuning to expected outputs; constants are priors |
 
 Two consequences deserve emphasis.
@@ -952,63 +954,83 @@ The breakdown is reported by category and by month. The monthly timeline answers
 
 ## 14. Output contract
 
-### 14.1 JSON summary
+### 14.1 TOML summary
 
-The primary output is a single JSON document. Its top-level structure is:
+The primary output is a single TOML document. Keys are snake_case, dates use the native TOML date type, and repeated records use arrays of tables.
 
-```json
-{
-  "schemaVersion": "1.0",
-  "case": { "name": "...", "startDate": "...", "horizonDays": 365 },
-  "sampling": { "replications": 20000, "seed": 20261021, "epistemicUncertaintySampled": true },
-  "effectiveConfiguration": { "...": "complete echo of every parameter used" },
-  "aggregates": {
-    "distanceKilometres": { "mean": 0, "p10": 0, "p50": 0, "p90": 0 },
-    "fuelLitres": { "...": "..." },
-    "fuelConsumptionLitresPer100Kilometres": { "...": "..." },
-    "totalCostOfOwnershipEuros": { "...": "..." }
-  },
-  "costBreakdown": {
-    "fuelEuros": { "...": "..." },
-    "scheduledMaintenanceEuros": { "...": "..." },
-    "wearReplacementEuros": { "...": "..." },
-    "unplannedRepairEuros": { "...": "..." },
-    "consequentialEuros": { "...": "..." }
-  },
-  "partPrognoses": [
-    {
-      "id": "frontBrakePads",
-      "label": "Front brake pads",
-      "unit": "millimetres",
-      "replaceable": true,
-      "failureModelled": false,
-      "stateNow": { "p10": 7.5, "p50": 9.0, "p90": 10.5 },
-      "stateAtHorizon": { "p10": 4.8, "p50": 6.1, "p90": 7.4 },
-      "replacementProbability": 0.12,
-      "replacementDay": { "p10": 180, "p50": 260, "p90": 340 },
-      "failureProbability": 0.0,
-      "expectedCostEuros": 11.0,
-      "warnings": []
-    }
-  ],
-  "failures": [
-    { "id": "battery", "probabilityAtLeastOne": 0.04, "expectedCount": 0.04 }
-  ],
-  "monthlyTimeline": [
-    { "month": 1, "costEuros": { "p50": 0, "p90": 0 },
-      "frontPadMillimetres": { "p50": 0 }, "tireTreadMillimetres": { "p50": 0 } }
-  ],
-  "diagnostics": {
-    "annualDistanceKilometres": { "p50": 0 },
-    "coldStarts": { "p50": 0 },
-    "shortTripShare": { "p50": 0 },
-    "highwayDistanceKilometres": { "p50": 0 },
-    "uncertaintySplit": { "aleatoryFraction": 0.0, "epistemicFraction": 0.0 }
-  }
-}
+```toml
+schema_version = "1.0"
+
+[case]
+name = "2019-golf-1.5-tsi"
+start_date = 2026-10-01
+horizon_days = 365
+
+[sampling]
+replications = 20000
+random_seed = 20261021
+epistemic_uncertainty_sampled = true
+
+[aggregates.distance_kilometres]
+mean = 12450.0
+p10 = 10800.0
+p50 = 12400.0
+p90 = 14100.0
+
+[aggregates.fuel_litres]
+mean = 812.4
+p10 = 705.0
+p50 = 810.0
+p90 = 921.0
+
+[aggregates.total_cost_of_ownership_euros]
+mean = 2140.0
+p10 = 1880.0
+p50 = 2120.0
+p90 = 2410.0
+p95 = 2580.0
+tail_average_95 = 2720.0
+
+[cost_breakdown.fuel_euros]
+mean = 1421.0
+p50 = 1418.0
+
+[[part_prognoses]]
+id = "front_brake_pads"
+label = "Front brake pads"
+unit = "millimetres"
+replaceable = true
+failure_modelled = false
+replacement_probability = 0.12
+failure_probability = 0.0
+expected_cost_euros = 11.0
+
+[part_prognoses.state_now]
+p10 = 7.5
+p50 = 9.0
+p90 = 10.5
+
+[part_prognoses.state_at_horizon]
+p10 = 4.8
+p50 = 6.1
+p90 = 7.4
+
+[[failures]]
+id = "battery"
+probability_at_least_one = 0.04
+expected_count = 0.04
+
+[[monthly_timeline]]
+month = 1
+cost_euros_p50 = 178.0
+cost_euros_p90 = 240.0
+front_pad_millimetres_p50 = 8.8
+tire_tread_millimetres_p50 = 4.9
 ```
 
-Percentile objects contain at least `mean`, `p10`, `p50`, `p90`; cost objects additionally contain `p95` and `tailAverage95`.
+Percentile tables contain at least `mean`, `p10`, `p50`, and `p90`. Cost tables additionally contain `p95` and `tail_average_95`. The `[effective_configuration]` table echoes the fully resolved configuration, so every result can be audited and reproduced.
+
+Optional fields are omitted rather than encoded with a sentinel. For example, a replacement day is absent when the part is never replaced in the replication set. The TOML summary is the human- and tool-friendly digest; the CSV files are the canonical per-replication data.
 
 ### 14.2 CSV per replication
 
@@ -1017,25 +1039,25 @@ Percentile objects contain at least `mean`, `p10`, `p50`, `p90`; cost objects ad
 Columns include:
 
 ```
-replication, seed,
-distanceKilometres, fuelLitres, fuelConsumptionLitresPer100Kilometres,
-engineWearEquivalentKilometres, oilDegradation, oilLevelFraction,
-frontPadMillimetres, rearPadMillimetres, frontDiscMillimetres, rearDiscMillimetres,
-tireTreadFrontLeftMillimetres, tireTreadFrontRightMillimetres,
-tireTreadRearLeftMillimetres, tireTreadRearRightMillimetres,
-batteryStateOfHealth, suspensionWearIndex, clutchWearIndex,
-exhaustCorrosionIndex, catalystDegradationIndex, paintDamageIndex,
-windshieldChipCount, rustStarted,
-fuelCostEuros, scheduledMaintenanceEuros, wearReplacementEuros,
-unplannedRepairEuros, consequentialEuros, totalCostOfOwnershipEuros,
-failureCount, downtimeDays, depreciationEuros
+replication, random_seed,
+distance_kilometres, fuel_litres, fuel_consumption_litres_per_100_kilometres,
+engine_wear_equivalent_kilometres, oil_degradation, oil_level_fraction,
+front_pad_millimetres, rear_pad_millimetres, front_disc_millimetres, rear_disc_millimetres,
+tire_tread_front_left_millimetres, tire_tread_front_right_millimetres,
+tire_tread_rear_left_millimetres, tire_tread_rear_right_millimetres,
+battery_state_of_health, suspension_wear_index, clutch_wear_index,
+exhaust_corrosion_index, catalyst_degradation_index, paint_damage_index,
+windshield_chip_count, rust_started,
+fuel_cost_euros, scheduled_maintenance_euros, wear_replacement_euros,
+unplanned_repair_euros, consequential_euros, total_cost_of_ownership_euros,
+failure_count, downtime_days, depreciation_euros
 ```
 
 `monthly.csv` contains one row per replication and month with the monthly cost and the principal wear states, if enabled.
 
 ### 14.3 Determinism
 
-The same case and the same seed produce the same JSON and CSV within the same build and platform. Floating-point formatting is fixed. The seed is part of the output, so a result can always be reproduced.
+The same case and the same seed produce the same TOML and CSV within the same build and platform. Floating-point formatting is fixed. The seed is part of the output, so a result can always be reproduced.
 
 ---
 
@@ -1068,23 +1090,77 @@ The report includes a diagnostic ranking: which inputs, if measured or changed, 
 
 ### 16.1 The configuration file
 
-The configuration file is the single source of truth. It is a JSON document with these top-level sections:
+The configuration file is the single source of truth. It is a TOML document. Keys are snake_case, dates use the native TOML date type, lists use TOML arrays, and grouped settings use TOML tables.
 
 | Section | Contents |
 |---|---|
-| `case` | Name, start date, horizon, replications, seed, output options |
-| `vehicle` | Mass, drag area, engine, transmission, drivetrain, component specifications |
-| `currentState` | Measured condition with uncertainties |
-| `user` | Commuting, errands, long trips, style, maintenance adherence, parking |
-| `climate` | Zone preset plus overrides |
-| `maintenance` | Intervals and service costs |
-| `reliability` | Failure rates, frailty, hazard multipliers |
-| `model` | Physical and engineering constants |
-| `costs` | Installed part and service costs |
-| `economics` | Fuel price, price index, towing, downtime, depreciation, budget |
-| `routeClasses` | Speed, stop density, and acceleration per route class |
+| `[case]` | Name, start date, horizon |
+| `[sampling]` | Replications, random seed, epistemic sampling toggle |
+| `[output]` | Output directory and CSV toggles |
+| `[vehicle]` | Mass, drag area, engine, transmission, drivetrain, component specifications |
+| `[current_state]` | Measured condition; `[current_state.uncertainty]` holds the standard deviations |
+| `[user]` | Commuting, errands, long trips, style, maintenance adherence, parking |
+| `[climate]` | Zone preset plus overrides |
+| `[maintenance]` | Intervals, deferral, detection, service costs |
+| `[reliability]` | Failure rates, frailty, hazard multipliers |
+| `[model]` | Physical and engineering constants |
+| `[costs]` | Installed part and service costs |
+| `[economics]` | Fuel price, price index, towing, downtime, depreciation, budget |
+| `[route_classes]` | Speed, stop density, and acceleration per route class |
+
+A minimal configuration looks like this:
+
+```toml
+schema_version = "1.0"
+
+[case]
+name = "2019-golf-1.5-tsi"
+start_date = 2026-10-01
+horizon_days = 365
+
+[sampling]
+replications = 20000
+random_seed = 20261021
+sample_epistemic_uncertainty = true
+
+[output]
+directory = "output"
+write_per_replication_csv = true
+write_monthly_csv = false
+
+[vehicle]
+mass_kilograms = 1450.0
+drag_area_square_metres = 0.68
+engine_displacement_litres = 1.5
+turbocharged = true
+transmission = "manual"
+drivetrain = "front"
+odometer_kilometres = 85000.0
+vehicle_age_years = 6.0
+
+[user]
+commute_distance_kilometres = 25.0
+commute_days_per_week = 5
+style_aggressiveness = 0.4
+maintenance_adherence = 0.7
+parking = "street"
+
+[climate]
+zone = "temperate-maritime"
+
+[current_state]
+front_pad_thickness_millimetres = 9.0
+rear_pad_thickness_millimetres = 7.5
+tire_tread_millimetres = [5.0, 5.0, 4.6, 4.6]
+
+[current_state.uncertainty]
+front_pad_thickness_millimetres = 1.5
+tire_tread_millimetres = 0.5
+```
 
 Every field has a documented default. A minimal configuration may specify only the case, the vehicle, and the user; the remainder falls back to defaults. The output echoes the fully resolved configuration.
+
+The TOML parser is `toml++`, a header-only library and the only third-party dependency besides Google Test. Parse errors report the file, line, and column. Unknown keys inside a known table produce a warning rather than being silently dropped; an unknown schema major version is an error.
 
 ### 16.2 Schema versioning
 
@@ -1102,7 +1178,7 @@ Before simulation, the engine checks:
 - a climate zone that exists or a complete override,
 - at least one replication.
 
-Invalid input produces a clear error, not a silent fallback.
+Invalid input produces a clear error with the offending key and value, not a silent fallback.
 
 ### 16.4 Nominal constants and ranges
 
@@ -1150,6 +1226,8 @@ Real validation requires data that version 0.1 does not have:
 
 The calibration plan is to fit only the coefficients that are identifiable from such data, and to leave structural choices untouched. Until then, every output carries a model-version and prior-provenance note.
 
+The relative importance of battery, brake, suspension, and age-dependent defects is anchored to the ADAC and TÜV reports in Appendix F. Those reports are sanity anchors and sources for relative priors, not calibration data for absolute rates.
+
 ---
 
 ## 18. Limitations
@@ -1173,7 +1251,7 @@ These limitations are deliberate. Each one is a candidate for a later version, n
 
 | Version | Content |
 |---|---|
-| 0.1 | This model: single case, gasoline, one year, JSON and CSV output |
+| 0.1 | This model: single case, gasoline, one year, TOML and CSV output |
 | 0.2 | Historical weather replay from a CSV; calibration harness |
 | 0.3 | Global sensitivity analysis; uncertainty decomposition in the report |
 | 0.4 | Additional components and regional inspection regimes |
@@ -1397,15 +1475,45 @@ Rationale: driving happens before maintenance, maintenance happens before failur
 
 ---
 
-## Appendix E — Open questions for review
+## Appendix E — Resolved design decisions
 
-1. **Route classes.** Are the four classes (city, mixed, rural, highway) sufficient, or should the case accept an explicit average-speed distribution?
-2. **Seasonal tires.** Should the default be on for continental and alpine zones and off elsewhere, or always a user choice?
-3. **Paint cost.** Should cosmetic paint repair appear as a cost at all, or remain an indicator only?
-4. **Default economics.** Which currency and price level should the shipped default configuration use?
-5. **Failure priors.** Are there internal or public sources the reviewer wants to anchor the annual failure rates to?
-6. **Horizon.** Is one year the only horizon, or should the configuration allow multi-year runs from the start?
-7. **Output schema.** Is the JSON summary plus CSV per-replication split suitable for the downstream tooling?
+These were the open questions in the first draft. They are now closed for version 0.1.
+
+| Topic | Decision | Rationale |
+|---|---|---|
+| Route classes | Keep four configurable classes: city, mixed, rural, highway. No separate average-speed input. | Distance, class, style, and weather already determine the speed distribution. An additional speed input would be redundant and hard to interpret. |
+| Seasonal tires | Default on for continental, alpine, and Nordic zones; default off for maritime, Mediterranean, and arid zones. Always overridable. | Matches common practice without forcing seasonal tires on every case. |
+| Paint repair cost | Reported as a separate line, excluded from TCO by default through `include_paint_repair_in_tco = false`. | Keeps TCO comparable across cases and reflects the low value impact of cosmetic paint damage. |
+| Default economics | Euro, Germany, 2026 price level. Fuel 1.75 euro per litre, regional price index 1.0. | A single explicit baseline is easier to audit than a currency-neutral model. The configuration can override every value. |
+| Failure priors | Relative weights anchored to the ADAC and TÜV reports in Appendix F. Absolute annual rates remain literature and engineering priors. | Avoids false precision while keeping the failure model plausible and documented. |
+| Horizon | Any horizon from one day upward. Default 365 days. | The simulation loop is horizon-agnostic; multi-year runs cost only compute time. |
+| Output format | TOML summary plus CSV per replication and per month. No JSON. | TOML is readable and has a mature header-only parser; CSV remains the right format for large per-replication tables. |
+
+The decisions do not remove the limitations listed in Section 18. In particular, absolute failure rates remain priors until service and repair data are available.
+
+---
+
+## Appendix F — Sources and calibration anchors
+
+The model is not calibrated to these sources. They inform relative priors and sanity anchors, not absolute predictions.
+
+1. **ADAC Pannenstatistik 2026**, "Die Gewinner und Verlierer", 23 April 2026.
+   <https://www.adac.de/rund-ums-fahrzeug/unfall-schaden-panne/adac-pannenstatistik-2026/>
+   Accessed 2026-10-22.
+   Used for: the starter battery is the most common breakdown cause, with a share of roughly 44 to 45 percent in the 2026 statistics. This supports the weight given to battery health and cold-cranking failure.
+
+2. **TÜV-Verband, TÜV-Report 2026**, "Mängelquoten steigen zum vierten Mal in Folge", 20 November 2025.
+   <https://www.tuev-verband.de/pressemitteilungen/tuev-report-2026>
+   Accessed 2026-10-22.
+   Used for: 21.5 percent of inspected cars had significant or dangerous defects, 12.3 percent had minor defects, and 66.1 percent were defect-free. The average German car was 10.6 years old. Defect rates rise with vehicle age, and brakes, springs, and dampers are among the most frequent defects. This supports the age-dependent hazard structure and the inclusion of suspension and brakes in the wear model.
+
+3. **toml++ 3.4.0**, TOML parser and serializer.
+   <https://github.com/marzer/tomlplusplus>
+   Implementation dependency, not a model source.
+
+4. **Google Test 1.18.0**, test framework.
+   <https://github.com/google/googletest>
+   Implementation dependency, not a model source.
 
 ---
 
