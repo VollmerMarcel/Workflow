@@ -399,7 +399,7 @@ Ultraviolet load is the monthly ultraviolet index reduced by cloud cover, which 
 | Weather condition | Engine | Brakes | Tires | Battery | Exhaust | Paint | Fuel |
 |---|---|---|---|---|---|---|---|
 | Low temperature | cold-start wear up, oil degradation up | — | winter compound | health down, cranking demand up | condensation up | — | cold enrichment up |
-| Heat | thermal load up | fade risk up | wear up | aging up | — | UV damage up | air-conditioning load up |
+| Heat | thermal load up | fade risk up | wear up | aging up | — | ultraviolet damage up | air-conditioning load up |
 | Rain | — | corrosion up | grip loss, wear up | — | — | wash-off | rolling resistance up, speed down |
 | Snow and salt | — | corrosion up | — | — | corrosion up | salt damage and rust up | speed down, demand down |
 | Hail | — | — | — | — | — | damage jump | — |
