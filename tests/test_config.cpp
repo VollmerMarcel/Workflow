@@ -213,6 +213,19 @@ zone = "temperate-maritime"
               rhs.monthly_precipitation_probability);
 }
 
+TEST(ConfigTest, DerivedTireDefaultHonoursConfiguredNewTread) {
+    const ConfigLoadResult loaded = test::load_case(R"toml(
+[vehicle]
+tire_new_tread_millimetres = 4.0
+)toml");
+    ASSERT_TRUE(loaded.ok());
+    for (double tread : loaded.config->current_state.tire_tread_millimetres) {
+        EXPECT_LE(tread, 4.0);
+        EXPECT_GE(tread,
+                  loaded.config->model.tire_tread_wear_limit_millimetres);
+    }
+}
+
 TEST(ConfigTest, WinterTireUncertaintyRoundTrips) {
     const ConfigLoadResult loaded = test::load_case(R"toml(
 [current_state.uncertainty]
