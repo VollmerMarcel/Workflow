@@ -264,7 +264,7 @@ FailureDayResult sample_failures(const Config& config, SimulationState& state,
         const double per_day =
             1.0 - std::pow(1.0 - clamp(per_start, 0.0, 1.0),
                            static_cast<double>(context.cold_starts));
-        if (rng.bernoulli(per_day)) {
+        if (rng.bernoulli(clamp(per_day * frailty, 0.0, 1.0))) {
             const double cost = repair_cost(config, costs.battery_euros, cost_rng);
             record_failure(events, ledger, day, "battery", cost);
             add_consequences(config, ledger, day, result);
@@ -280,6 +280,9 @@ FailureDayResult sample_failures(const Config& config, SimulationState& state,
     }
 
     // --- Windshield: chip propagation to a crack ---------------------------
+    // Cracking depends on the installed glass, the chip population, and the
+    // weather. It is an environmental event process, not a reliability hazard,
+    // so the car-level frailty factor does not apply here.
     if (state.windshield_chip_count > 0 &&
         context.minimum_temperature_celsius <=
             model.windshield_crack_temperature_threshold_celsius) {

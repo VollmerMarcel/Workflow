@@ -43,6 +43,8 @@ Weather WeatherProcess::next_day() {
         dry_to_wet = clamp(p * (1.0 - q) / (1.0 - p), 0.0, 1.0);
     } else if (p <= 0.0) {
         dry_to_wet = 0.0;
+    } else {
+        dry_to_wet = 1.0;
     }
     weather.precipitation = previous_precipitation_ ? rng_.bernoulli(q)
                                                     : rng_.bernoulli(dry_to_wet);
@@ -57,7 +59,8 @@ Weather WeatherProcess::next_day() {
         rng_.bernoulli(climate.salt_probability_on_frost_day);
     weather.uv_index = climate.monthly_uv_index[index] *
                        (weather.precipitation ? (1.0 - climate.uv_cloud_reduction) : 1.0);
-    weather.hail = rng_.bernoulli(climate.annual_hail_days / 365.0);
+    weather.hail =
+        rng_.poisson(climate.annual_hail_days / 365.0) > 0;
 
     previous_precipitation_ = weather.precipitation;
     return weather;

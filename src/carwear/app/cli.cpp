@@ -234,7 +234,8 @@ int run_single(const Options& options) {
     std::cout << "run: case=" << result.case_name << " seed=" << result.run_seed
               << " distance_km=" << result.totals.distance_kilometres
               << " fuel_l=" << result.totals.fuel_litres
-              << " tco_eur=" << result.totals.total_cost_of_ownership_euros
+              << " total_cost_of_ownership_euros="
+              << result.totals.total_cost_of_ownership_euros
               << " failures=" << result.totals.failure_count
               << " downtime_days=" << result.totals.downtime_days << '\n';
     std::cout << "wrote: " << directory.string() << '\n';
@@ -274,11 +275,11 @@ int run_monte_carlo_command(const Options& options) {
     const Aggregate& aggregate = result.aggregate;
     std::cout << "monte-carlo: runs=" << aggregate.number_of_runs
               << " master_seed=" << aggregate.master_seed
-              << " mean_tco_eur="
+              << " mean_total_cost_of_ownership_euros="
               << aggregate.total_cost_of_ownership_euros.mean
-              << " p50_tco_eur="
+              << " p50_total_cost_of_ownership_euros="
               << aggregate.total_cost_of_ownership_euros.p50
-              << " p95_tco_eur="
+              << " p95_total_cost_of_ownership_euros="
               << aggregate.total_cost_of_ownership_euros.p95 << '\n';
     if (aggregate.budget_defined) {
         std::cout << "probability_exceeding_budget="
@@ -323,9 +324,19 @@ int run_cli(int argc, char** argv) {
         return exit_code;
     }
     if (options->command == "run") {
+        if (options->runs.has_value() || options->runs_per_sample.has_value() ||
+            options->nominal) {
+            std::cerr << "error: run is a single-run command; --runs, "
+                         "--runs-per-sample and --nominal belong to monte-carlo\n";
+            return 2;
+        }
         return run_single(*options);
     }
     if (options->command == "monte-carlo" || options->command == "mc") {
+        if (options->trips) {
+            std::cerr << "error: --trips belongs to run, not monte-carlo\n";
+            return 2;
+        }
         return run_monte_carlo_command(*options);
     }
     if (options->command == "config") {

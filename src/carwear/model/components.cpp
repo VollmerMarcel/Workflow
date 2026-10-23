@@ -15,6 +15,18 @@ double effective_wear_factor(double installed_factor) {
     return installed_factor > 0.0 ? installed_factor : 1.0;
 }
 
+double parking_ding_multiplier(const Config& config) {
+    switch (config.user.parking) {
+        case Parking::street:
+            return config.model.parking_ding_multiplier_street;
+        case Parking::carport:
+            return config.model.parking_ding_multiplier_carport;
+        case Parking::garage:
+            return config.model.parking_ding_multiplier_garage;
+    }
+    return 1.0;
+}
+
 }  // namespace
 
 double update_engine_trip(const Config& config, SimulationState& state,
@@ -211,7 +223,7 @@ void update_exhaust_and_catalyst_trip(const Config& config, SimulationState& sta
         clamp(state.catalyst_degradation_index +
                   drive.distance_kilometres *
                       model.catalyst_degradation_per_kilometre +
-                  oil_burned_litres * model.catalyst_oil_poisoning_factor,
+                  oil_burned_litres * model.catalyst_oil_poisoning_per_litre,
               0.0, 1.0);
 }
 
@@ -234,7 +246,8 @@ void update_paint_trip(const Config& config, SimulationState& state,
 
     if (drive.route_class == RouteClass::highway) {
         const double speed_factor =
-            clamp(drive.mean_speed_kph / 100.0, 0.5, 1.5);
+            clamp(drive.mean_speed_kph / model.stone_chip_speed_reference_kph,
+                  0.5, 1.5);
         const int chips = rng.poisson(model.stone_chip_rate_per_highway_kilometre *
                                       drive.distance_kilometres * speed_factor);
         state.paint_damage_index =
@@ -255,7 +268,9 @@ void update_windshield_trip(const Config& config, SimulationState& state,
         return;
     }
     const auto& model = config.model;
-    const double speed_factor = clamp(drive.mean_speed_kph / 100.0, 0.5, 1.5);
+    const double speed_factor =
+        clamp(drive.mean_speed_kph / model.windshield_speed_reference_kph, 0.5,
+              1.5);
     const double gravel_factor =
         1.0 + model.windshield_gravel_factor_per_share *
                   config.climate.gravel_road_share;
@@ -327,7 +342,8 @@ void apply_daily_aging(const Config& config, SimulationState& state,
         state.paint_damage_index =
             clamp(state.paint_damage_index + model.hail_damage, 0.0, 1.0);
     }
-    const int dings = rng.poisson(model.parking_ding_rate_per_day);
+    const int dings = rng.poisson(model.parking_ding_rate_per_day *
+                                  parking_ding_multiplier(config));
     if (dings > 0) {
         state.paint_damage_index =
             clamp(state.paint_damage_index + dings * model.stone_chip_damage, 0.0, 1.0);

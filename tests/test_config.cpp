@@ -150,5 +150,85 @@ suspension_replacement_wear_index = 1.5
     EXPECT_FALSE(loaded.ok());
 }
 
+TEST(ConfigTest, InfiniteModelValueIsAnError) {
+    const ConfigLoadResult loaded = test::load_case(R"toml(
+[model]
+pad_wear_millimetres_per_megajoule = inf
+)toml");
+    EXPECT_FALSE(loaded.ok());
+}
+
+TEST(ConfigTest, NegativeHazardMultiplierIsAnError) {
+    const ConfigLoadResult loaded = test::load_case(R"toml(
+[reliability]
+engine_wear_hazard_multiplier = -1.0
+)toml");
+    EXPECT_FALSE(loaded.ok());
+}
+
+TEST(ConfigTest, UnvalidatedProbabilityIsAnError) {
+    const ConfigLoadResult loaded = test::load_case(R"toml(
+[model]
+windshield_crack_probability_per_chip_per_cold_day = 1.5
+)toml");
+    EXPECT_FALSE(loaded.ok());
+}
+
+TEST(ConfigTest, NegativeTripVariationIsAnError) {
+    const ConfigLoadResult loaded = test::load_case(R"toml(
+[user]
+long_trip_distance_coefficient_of_variation = -0.1
+)toml");
+    EXPECT_FALSE(loaded.ok());
+}
+
+TEST(ConfigTest, NegativeBudgetIsAnError) {
+    const ConfigLoadResult loaded = test::load_case(R"toml(
+[economics]
+budget_euros = -500.0
+)toml");
+    EXPECT_FALSE(loaded.ok());
+}
+
+TEST(ConfigTest, ClimateDefaultsMatchMaritimePreset) {
+    const ConfigLoadResult defaulted = test::load_case();
+    const ConfigLoadResult explicit_maritime = test::load_case(R"toml(
+[climate]
+zone = "temperate-maritime"
+)toml");
+    ASSERT_TRUE(defaulted.ok());
+    ASSERT_TRUE(explicit_maritime.ok());
+
+    const ClimateConfig& lhs = defaulted.config->climate;
+    const ClimateConfig& rhs = explicit_maritime.config->climate;
+    EXPECT_EQ(lhs.zone, rhs.zone);
+    EXPECT_EQ(lhs.winter_tires, rhs.winter_tires);
+    EXPECT_DOUBLE_EQ(lhs.precipitation_persistence,
+                     rhs.precipitation_persistence);
+    EXPECT_DOUBLE_EQ(lhs.salt_probability_on_frost_day,
+                     rhs.salt_probability_on_frost_day);
+    EXPECT_EQ(lhs.monthly_temperature_mean_celsius,
+              rhs.monthly_temperature_mean_celsius);
+    EXPECT_EQ(lhs.monthly_precipitation_probability,
+              rhs.monthly_precipitation_probability);
+}
+
+TEST(ConfigTest, WinterTireUncertaintyRoundTrips) {
+    const ConfigLoadResult loaded = test::load_case(R"toml(
+[current_state.uncertainty]
+winter_tire_tread_millimetres = [0.4, 0.4, 0.5, 0.5]
+winter_tire_age_years = 1.5
+)toml");
+    ASSERT_TRUE(loaded.ok());
+    EXPECT_DOUBLE_EQ(
+        loaded.config->uncertainty.winter_tire_tread_millimetres[2], 0.5);
+    EXPECT_DOUBLE_EQ(loaded.config->uncertainty.winter_tire_age_years, 1.5);
+
+    const std::string text = config_to_toml_string(*loaded.config);
+    EXPECT_NE(text.find("winter_tire_tread_millimetres"),
+              std::string::npos);
+    EXPECT_NE(text.find("winter_tire_age_years"), std::string::npos);
+}
+
 }  // namespace
 }  // namespace carwear

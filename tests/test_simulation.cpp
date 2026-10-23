@@ -187,6 +187,77 @@ zone = "nordic"
     EXPECT_EQ(result.monthly.size(), 12u);
 }
 
+TEST(SimulationTest, CatalystDoesNotSaturateInOneYear) {
+    const Config config = test_config();
+    const RunResult result = run(config, 5);
+    EXPECT_LT(result.final_state.catalyst_degradation_index, 0.9);
+}
+
+TEST(SimulationTest, ParkingTypeScalesDingDamage) {
+    const ConfigLoadResult loaded = parse_config(R"toml(
+[case]
+name = "parking"
+start_date = 2026-01-01
+horizon_days = 90
+
+[model]
+parking_ding_rate_per_day = 1.0
+parking_ding_multiplier_street = 1.0
+parking_ding_multiplier_carport = 0.5
+parking_ding_multiplier_garage = 0.2
+stone_chip_rate_per_highway_kilometre = 0.0
+uv_damage_per_index_day = 0.0
+salt_damage_per_day = 0.0
+grit_damage_per_kilometre = 0.0
+hail_damage = 0.0
+
+[user]
+parking = "street"
+)toml",
+                                             "parking-street");
+    ASSERT_TRUE(loaded.ok());
+    Config street = *loaded.config;
+    Config garage = street;
+    garage.user.parking = Parking::garage;
+
+    const RunResult street_run = run(street, 31);
+    const RunResult garage_run = run(garage, 31);
+    EXPECT_GT(street_run.final_state.paint_damage_index,
+              garage_run.final_state.paint_damage_index);
+}
+
+TEST(SimulationTest, AnnualEmissionsInspectionChecksDegradedCatalyst) {
+    const ConfigLoadResult loaded = parse_config(R"toml(
+[case]
+name = "emissions"
+start_date = 2026-11-01
+horizon_days = 365
+
+[model]
+catalyst_degradation_per_kilometre = 0.001
+catalyst_emissions_threshold = 0.05
+catalyst_oil_poisoning_per_litre = 0.0
+
+[current_state]
+catalyst_degradation_index = 0.0
+
+[current_state.uncertainty]
+catalyst_degradation_index = 0.0
+)toml",
+                                             "emissions");
+    ASSERT_TRUE(loaded.ok());
+    const RunResult result = run(*loaded.config, 5);
+
+    const auto catalyst = std::find_if(
+        result.events.begin(), result.events.end(), [](const Event& event) {
+            return event.item == "catalyst" &&
+                   event.kind == EventKind::wear_replacement;
+        });
+    ASSERT_NE(catalyst, result.events.end());
+    EXPECT_GT(catalyst->day, 300);
+    EXPECT_LE(catalyst->day, 365);
+}
+
 TEST(SimulationTest, HorizonAndSeedAreEchoed) {
     Config config = test_config();
     config.case_config.horizon_days = 45;

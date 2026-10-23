@@ -131,13 +131,13 @@ public:
                 std::chrono::day{static_cast<unsigned>(value->day)}};
             if (!candidate.ok()) {
                 error(key, "is not a valid calendar date");
-            } else {
-                target = candidate;
+                return false;
             }
-        } else {
-            type_error(key, "a TOML date (YYYY-MM-DD)");
+            target = candidate;
+            return true;
         }
-        return true;
+        type_error(key, "a TOML date (YYYY-MM-DD)");
+        return false;
     }
 
     void get_monthly(std::string_view key, Monthly& target) {
@@ -321,10 +321,6 @@ const toml::table* sub_table(const toml::table& root, std::string_view name,
         return nullptr;
     }
     return table;
-}
-
-Monthly preset_temperature_maritime() {
-    return {2.0, 3.0, 6.0, 10.0, 14.0, 17.0, 19.0, 19.0, 16.0, 11.0, 6.0, 3.0};
 }
 
 void load_case(const toml::table& root, Config& config, Diagnostics& diagnostics) {
@@ -527,7 +523,8 @@ void load_model(const toml::table& root, Config& config, Diagnostics& diagnostic
                model.exhaust_humidity_corrosion_per_day);
     reader.get("catalyst_degradation_per_kilometre",
                model.catalyst_degradation_per_kilometre);
-    reader.get("catalyst_oil_poisoning_factor", model.catalyst_oil_poisoning_factor);
+    reader.get("catalyst_oil_poisoning_per_litre",
+               model.catalyst_oil_poisoning_per_litre);
     reader.get("exhaust_emissions_threshold", model.exhaust_emissions_threshold);
     reader.get("catalyst_emissions_threshold", model.catalyst_emissions_threshold);
     reader.get("exhaust_replacement_wear_index",
@@ -542,9 +539,17 @@ void load_model(const toml::table& root, Config& config, Diagnostics& diagnostic
     reader.get("grit_damage_per_kilometre", model.grit_damage_per_kilometre);
     reader.get("stone_chip_rate_per_highway_kilometre",
                model.stone_chip_rate_per_highway_kilometre);
+    reader.get("stone_chip_speed_reference_kph",
+               model.stone_chip_speed_reference_kph);
     reader.get("stone_chip_damage", model.stone_chip_damage);
     reader.get("hail_damage", model.hail_damage);
     reader.get("parking_ding_rate_per_day", model.parking_ding_rate_per_day);
+    reader.get("parking_ding_multiplier_street",
+               model.parking_ding_multiplier_street);
+    reader.get("parking_ding_multiplier_carport",
+               model.parking_ding_multiplier_carport);
+    reader.get("parking_ding_multiplier_garage",
+               model.parking_ding_multiplier_garage);
     reader.get("wash_protection_per_wash_per_month",
                model.wash_protection_per_wash_per_month);
     reader.get("rust_threshold", model.rust_threshold);
@@ -900,23 +905,31 @@ void load_current_state(const toml::table& root, Config& config, Diagnostics& di
     state.rear_disc_millimetres = worn_fraction(
         maintenance.rear_disc_wear_limit_millimetres,
         vehicle.rear_disc_new_millimetres, 0.75);
-    state.tire_tread_millimetres = {5.0, 5.0, 5.0, 5.0};
+    state.tire_tread_millimetres.fill(clamp(
+        vehicle.tire_new_tread_millimetres - 3.0,
+        model.tire_tread_wear_limit_millimetres,
+        vehicle.tire_new_tread_millimetres));
     state.tire_pressure_bar = {vehicle.tire_pressure_specification_bar,
                                vehicle.tire_pressure_specification_bar,
                                vehicle.tire_pressure_specification_bar,
                                vehicle.tire_pressure_specification_bar};
-    state.tire_age_years = clamp(0.5 * vehicle.vehicle_age_years, 0.0, 5.0);
+    state.tire_age_years =
+        clamp(0.5 * vehicle.vehicle_age_years, 0.0, model.tire_age_limit_years);
     state.winter_tire_tread_millimetres = {vehicle.tire_new_tread_millimetres,
                                            vehicle.tire_new_tread_millimetres,
                                            vehicle.tire_new_tread_millimetres,
                                            vehicle.tire_new_tread_millimetres};
     state.winter_tire_age_years = state.tire_age_years;
-    state.battery_age_years = clamp(0.5 * vehicle.vehicle_age_years, 0.0, 6.0);
+    state.battery_age_years =
+        clamp(0.5 * vehicle.vehicle_age_years, 0.0, vehicle.vehicle_age_years);
     state.battery_state_of_health =
         clamp(1.0 - model.battery_age_factor * std::sqrt(state.battery_age_years), 0.0, 1.0);
     state.suspension_wear_index =
-        clamp(vehicle.odometer_kilometres / 300000.0, 0.0, 0.8);
-    state.clutch_wear_index = clamp(vehicle.odometer_kilometres / 300000.0, 0.0, 0.8);
+        clamp(vehicle.odometer_kilometres / 300000.0, 0.0,
+              model.suspension_replacement_wear_index);
+    state.clutch_wear_index =
+        clamp(vehicle.odometer_kilometres / 300000.0, 0.0,
+              model.clutch_replacement_wear_index);
     state.exhaust_corrosion_index = 0.20;
     state.catalyst_degradation_index = 0.15;
     state.cooling_wear_index = 0.20;
@@ -989,6 +1002,10 @@ void load_current_state(const toml::table& root, Config& config, Diagnostics& di
         uncertainty_reader.get_array4("tire_pressure_bar",
                                       uncertainty.tire_pressure_bar);
         uncertainty_reader.get("tire_age_years", uncertainty.tire_age_years);
+        uncertainty_reader.get_array4("winter_tire_tread_millimetres",
+                                      uncertainty.winter_tire_tread_millimetres);
+        uncertainty_reader.get("winter_tire_age_years",
+                               uncertainty.winter_tire_age_years);
         uncertainty_reader.get("battery_state_of_health",
                                uncertainty.battery_state_of_health);
         uncertainty_reader.get("battery_age_years", uncertainty.battery_age_years);
@@ -1022,23 +1039,26 @@ bool validate_config(const Config& config, Diagnostics& diagnostics) {
 
     auto error = [&](std::string message) { diagnostics.error(std::move(message)); };
     auto positive = [&](double value, std::string_view key) {
-        if (!(value > 0.0)) {
-            error(std::format("{} must be positive, found {}", key, value));
+        if (!std::isfinite(value) || !(value > 0.0)) {
+            error(std::format("{} must be a finite positive number, found {}", key, value));
         }
     };
     auto non_negative = [&](double value, std::string_view key) {
-        if (!(value >= 0.0)) {
-            error(std::format("{} must be non-negative, found {}", key, value));
+        if (!std::isfinite(value) || !(value >= 0.0)) {
+            error(std::format("{} must be a finite non-negative number, found {}", key,
+                              value));
         }
     };
     auto probability = [&](double value, std::string_view key) {
-        if (!(value >= 0.0 && value <= 1.0)) {
-            error(std::format("{} must be between 0 and 1, found {}", key, value));
+        if (!std::isfinite(value) || !(value >= 0.0 && value <= 1.0)) {
+            error(std::format("{} must be a finite number between 0 and 1, found {}",
+                              key, value));
         }
     };
     auto in_range = [&](double value, double lo, double hi, std::string_view key) {
-        if (!(value >= lo && value <= hi)) {
-            error(std::format("{} must be between {} and {}, found {}", key, lo, hi, value));
+        if (!std::isfinite(value) || !(value >= lo && value <= hi)) {
+            error(std::format("{} must be a finite number between {} and {}, found {}",
+                              key, lo, hi, value));
         }
     };
 
@@ -1048,14 +1068,25 @@ bool validate_config(const Config& config, Diagnostics& diagnostics) {
     if (config.case_config.horizon_days <= 0) {
         error(std::format("case.horizon_days must be positive, found {}",
                           config.case_config.horizon_days));
+    } else if (config.case_config.horizon_days > 36500) {
+        error(std::format("case.horizon_days must not exceed 36500, found {}",
+                          config.case_config.horizon_days));
     }
     if (config.monte_carlo.number_of_runs <= 0) {
         error(std::format("monte_carlo.number_of_runs must be positive, found {}",
                           config.monte_carlo.number_of_runs));
+    } else if (config.monte_carlo.number_of_runs > 1000000) {
+        error(std::format(
+            "monte_carlo.number_of_runs must not exceed 1000000, found {}",
+            config.monte_carlo.number_of_runs));
     }
     if (config.monte_carlo.runs_per_sample <= 0) {
         error(std::format("monte_carlo.runs_per_sample must be positive, found {}",
                           config.monte_carlo.runs_per_sample));
+    } else if (config.monte_carlo.runs_per_sample >
+               config.monte_carlo.number_of_runs) {
+        error(std::format(
+            "monte_carlo.runs_per_sample must not exceed number_of_runs"));
     }
 
     const auto& vehicle = config.vehicle;
@@ -1175,7 +1206,15 @@ bool validate_config(const Config& config, Diagnostics& diagnostics) {
                                  i));
         non_negative(uncertainty.tire_pressure_bar[i],
                      std::format("current_state.uncertainty.tire_pressure_bar[{}]", i));
+        non_negative(
+            uncertainty.winter_tire_tread_millimetres[i],
+            std::format(
+                "current_state.uncertainty.winter_tire_tread_millimetres[{}]", i));
     }
+    non_negative(uncertainty.tire_age_years,
+                 "current_state.uncertainty.tire_age_years");
+    non_negative(uncertainty.winter_tire_age_years,
+                 "current_state.uncertainty.winter_tire_age_years");
     non_negative(uncertainty.battery_state_of_health,
                  "current_state.uncertainty.battery_state_of_health");
     non_negative(uncertainty.suspension_wear_index,
@@ -1202,12 +1241,18 @@ bool validate_config(const Config& config, Diagnostics& diagnostics) {
     non_negative(user.errand_trips_per_week, "user.errand_trips_per_week");
     non_negative(user.errand_distance_kilometres,
                  "user.errand_distance_kilometres");
+    non_negative(user.errand_distance_coefficient_of_variation,
+                 "user.errand_distance_coefficient_of_variation");
     non_negative(user.weekend_trips_per_week, "user.weekend_trips_per_week");
     non_negative(user.weekend_distance_kilometres,
                  "user.weekend_distance_kilometres");
+    non_negative(user.weekend_distance_coefficient_of_variation,
+                 "user.weekend_distance_coefficient_of_variation");
     non_negative(user.long_trips_per_year, "user.long_trips_per_year");
     non_negative(user.long_trip_distance_kilometres,
                  "user.long_trip_distance_kilometres");
+    non_negative(user.long_trip_distance_coefficient_of_variation,
+                 "user.long_trip_distance_coefficient_of_variation");
     probability(user.style_aggressiveness, "user.style_aggressiveness");
     probability(user.maintenance_adherence, "user.maintenance_adherence");
     probability(user.part_quality, "user.part_quality");
@@ -1272,6 +1317,16 @@ bool validate_config(const Config& config, Diagnostics& diagnostics) {
                  "reliability.exhaust_annual_failure_rate");
     non_negative(reliability.cooling_annual_failure_rate,
                  "reliability.cooling_annual_failure_rate");
+    non_negative(reliability.engine_wear_hazard_multiplier,
+                 "reliability.engine_wear_hazard_multiplier");
+    non_negative(reliability.suspension_wear_hazard_multiplier,
+                 "reliability.suspension_wear_hazard_multiplier");
+    non_negative(reliability.clutch_wear_hazard_multiplier,
+                 "reliability.clutch_wear_hazard_multiplier");
+    non_negative(reliability.exhaust_wear_hazard_multiplier,
+                 "reliability.exhaust_wear_hazard_multiplier");
+    non_negative(reliability.cooling_wear_hazard_multiplier,
+                 "reliability.cooling_wear_hazard_multiplier");
     non_negative(reliability.failure_cost_lognormal_sigma,
                  "reliability.failure_cost_lognormal_sigma");
 
@@ -1280,8 +1335,8 @@ bool validate_config(const Config& config, Diagnostics& diagnostics) {
              "model.engine_design_life_kilometres");
     positive(model.cold_start_wear_temperature_scale_celsius,
              "model.cold_start_wear_temperature_scale_celsius");
-    positive(model.indicated_efficiency, "model.indicated_efficiency");
-    positive(model.driveline_efficiency, "model.driveline_efficiency");
+    non_negative(model.cold_start_wear_base_kilometres,
+                 "model.cold_start_wear_base_kilometres");
     probability(model.indicated_efficiency, "model.indicated_efficiency");
     probability(model.driveline_efficiency, "model.driveline_efficiency");
     probability(model.front_brake_energy_share,
@@ -1303,10 +1358,192 @@ bool validate_config(const Config& config, Diagnostics& diagnostics) {
              "model.gravity_metres_per_second_squared");
     non_negative(model.cold_start_wear_minimum_kilometres,
                  "model.cold_start_wear_minimum_kilometres");
+    non_negative(model.cold_start_wear_maximum_kilometres,
+                 "model.cold_start_wear_maximum_kilometres");
+    if (model.cold_start_wear_minimum_kilometres >
+        model.cold_start_wear_maximum_kilometres) {
+        error("model.cold_start_wear_minimum_kilometres must not exceed "
+              "cold_start_wear_maximum_kilometres");
+    }
     non_negative(model.cold_start_threshold_minutes,
                  "model.cold_start_threshold_minutes");
+    non_negative(model.warm_up_idle_factor, "model.warm_up_idle_factor");
+    non_negative(model.engine_load_wear_sensitivity,
+                 "model.engine_load_wear_sensitivity");
+    non_negative(model.oil_degradation_per_kilometre,
+                 "model.oil_degradation_per_kilometre");
+    non_negative(model.oil_degradation_per_cold_start,
+                 "model.oil_degradation_per_cold_start");
+    non_negative(model.oil_degradation_per_short_trip,
+                 "model.oil_degradation_per_short_trip");
+    non_negative(model.oil_degradation_per_day,
+                 "model.oil_degradation_per_day");
+    non_negative(model.oil_wear_sensitivity, "model.oil_wear_sensitivity");
+    positive(model.oil_wear_exponent, "model.oil_wear_exponent");
+    non_negative(model.oil_level_starvation_wear_factor,
+                 "model.oil_level_starvation_wear_factor");
+    non_negative(model.oil_starvation_hazard_multiplier,
+                 "model.oil_starvation_hazard_multiplier");
+    non_negative(model.base_oil_consumption_litres_per_1000_kilometres,
+                 "model.base_oil_consumption_litres_per_1000_kilometres");
+    non_negative(model.wear_oil_consumption_growth,
+                 "model.wear_oil_consumption_growth");
+    non_negative(model.turbo_wear_per_cycle, "model.turbo_wear_per_cycle");
+    non_negative(model.turbo_heat_sensitivity,
+                 "model.turbo_heat_sensitivity");
+    non_negative(model.turbo_hot_shutdown_wear,
+                 "model.turbo_hot_shutdown_wear");
+    positive(model.turbo_hot_shutdown_load_threshold,
+             "model.turbo_hot_shutdown_load_threshold");
+
+    positive(model.pad_wear_millimetres_per_megajoule,
+             "model.pad_wear_millimetres_per_megajoule");
+    non_negative(model.disc_wear_ratio, "model.disc_wear_ratio");
+    non_negative(model.brake_temperature_rise_per_megajoule_per_hour,
+                 "model.brake_temperature_rise_per_megajoule_per_hour");
+    non_negative(model.brake_temperature_wear_factor,
+                 "model.brake_temperature_wear_factor");
+    non_negative(model.brake_corrosion_per_salt_day_millimetres,
+                 "model.brake_corrosion_per_salt_day_millimetres");
+    positive(model.pad_compound_factor, "model.pad_compound_factor");
+
+    positive(model.tire_wear_millimetres_per_kilometre,
+             "model.tire_wear_millimetres_per_kilometre");
+    non_negative(model.tire_load_wear_exponent,
+                 "model.tire_load_wear_exponent");
+    positive(model.tire_pressure_wear_exponent,
+             "model.tire_pressure_wear_exponent");
+    non_negative(model.tire_lateral_wear_sensitivity,
+                 "model.tire_lateral_wear_sensitivity");
+    non_negative(model.tire_temperature_wear_sensitivity,
+                 "model.tire_temperature_wear_sensitivity");
+    non_negative(model.tire_pressure_leak_per_month_bar,
+                 "model.tire_pressure_leak_per_month_bar");
+    positive(model.tire_age_limit_years, "model.tire_age_limit_years");
+    positive(model.winter_tire_wear_factor, "model.winter_tire_wear_factor");
+    non_negative(model.wet_surface_wear_increase,
+                 "model.wet_surface_wear_increase");
+    non_negative(model.gravel_surface_wear_increase,
+                 "model.gravel_surface_wear_increase");
+    probability(model.front_axle_tire_share_front_wheel_drive,
+                "model.front_axle_tire_share_front_wheel_drive");
+    probability(model.front_axle_tire_share_rear_wheel_drive,
+                "model.front_axle_tire_share_rear_wheel_drive");
+    probability(model.front_axle_tire_share_all_wheel_drive,
+                "model.front_axle_tire_share_all_wheel_drive");
+
+    non_negative(model.battery_age_factor, "model.battery_age_factor");
+    non_negative(model.battery_heat_damage_per_degree_day,
+                 "model.battery_heat_damage_per_degree_day");
+    non_negative(model.battery_cycle_damage_per_start,
+                 "model.battery_cycle_damage_per_start");
+    non_negative(model.battery_deep_discharge_damage,
+                 "model.battery_deep_discharge_damage");
+    non_negative(model.battery_deep_discharge_trip_distance_kilometres,
+                 "model.battery_deep_discharge_trip_distance_kilometres");
+    probability(model.battery_required_health_base,
+                "model.battery_required_health_base");
+    non_negative(model.battery_required_health_per_degree_below_20,
+                 "model.battery_required_health_per_degree_below_20");
+    positive(model.battery_failure_steepness,
+             "model.battery_failure_steepness");
+
+    non_negative(model.suspension_wear_per_kilometre,
+                 "model.suspension_wear_per_kilometre");
+    non_negative(model.road_roughness_sensitivity,
+                 "model.road_roughness_sensitivity");
+    non_negative(model.cornering_wear_sensitivity,
+                 "model.cornering_wear_sensitivity");
+    non_negative(model.clutch_wear_per_start_manual,
+                 "model.clutch_wear_per_start_manual");
+    non_negative(model.clutch_wear_per_start_automatic,
+                 "model.clutch_wear_per_start_automatic");
+    non_negative(model.clutch_style_sensitivity,
+                 "model.clutch_style_sensitivity");
+
+    non_negative(model.exhaust_corrosion_per_day,
+                 "model.exhaust_corrosion_per_day");
+    non_negative(model.short_trip_corrosion_factor,
+                 "model.short_trip_corrosion_factor");
+    non_negative(model.exhaust_salt_corrosion_per_day,
+                 "model.exhaust_salt_corrosion_per_day");
+    non_negative(model.exhaust_humidity_corrosion_per_day,
+                 "model.exhaust_humidity_corrosion_per_day");
+    non_negative(model.catalyst_degradation_per_kilometre,
+                 "model.catalyst_degradation_per_kilometre");
+    non_negative(model.catalyst_oil_poisoning_per_litre,
+                 "model.catalyst_oil_poisoning_per_litre");
+    probability(model.exhaust_emissions_threshold,
+                "model.exhaust_emissions_threshold");
+    probability(model.catalyst_emissions_threshold,
+                "model.catalyst_emissions_threshold");
+    non_negative(model.cooling_wear_per_day, "model.cooling_wear_per_day");
+    non_negative(model.cooling_wear_per_thermal_cycle,
+                 "model.cooling_wear_per_thermal_cycle");
+
+    non_negative(model.uv_damage_per_index_day,
+                 "model.uv_damage_per_index_day");
+    non_negative(model.salt_damage_per_day, "model.salt_damage_per_day");
+    non_negative(model.grit_damage_per_kilometre,
+                 "model.grit_damage_per_kilometre");
+    non_negative(model.stone_chip_rate_per_highway_kilometre,
+                 "model.stone_chip_rate_per_highway_kilometre");
+    positive(model.stone_chip_speed_reference_kph,
+             "model.stone_chip_speed_reference_kph");
+    non_negative(model.stone_chip_damage, "model.stone_chip_damage");
+    non_negative(model.hail_damage, "model.hail_damage");
+    non_negative(model.parking_ding_rate_per_day,
+                 "model.parking_ding_rate_per_day");
+    non_negative(model.parking_ding_multiplier_street,
+                 "model.parking_ding_multiplier_street");
+    non_negative(model.parking_ding_multiplier_carport,
+                 "model.parking_ding_multiplier_carport");
+    non_negative(model.parking_ding_multiplier_garage,
+                 "model.parking_ding_multiplier_garage");
+    non_negative(model.wash_protection_per_wash_per_month,
+                 "model.wash_protection_per_wash_per_month");
+    non_negative(model.rust_growth_per_wet_salt_day,
+                 "model.rust_growth_per_wet_salt_day");
+
+    non_negative(model.windshield_chip_rate_per_highway_kilometre,
+                 "model.windshield_chip_rate_per_highway_kilometre");
+    probability(model.windshield_crack_probability_per_chip_per_cold_day,
+                "model.windshield_crack_probability_per_chip_per_cold_day");
     positive(model.windshield_speed_reference_kph,
              "model.windshield_speed_reference_kph");
+    non_negative(model.windshield_gravel_factor_per_share,
+                 "model.windshield_gravel_factor_per_share");
+
+    non_negative(model.friction_mean_effective_pressure_bar,
+                 "model.friction_mean_effective_pressure_bar");
+    non_negative(model.accessory_power_kilowatts,
+                 "model.accessory_power_kilowatts");
+    non_negative(model.air_conditioning_power_kilowatts,
+                 "model.air_conditioning_power_kilowatts");
+    non_negative(model.cold_start_extra_fuel_litres,
+                 "model.cold_start_extra_fuel_litres");
+    non_negative(model.cold_start_fuel_temperature_sensitivity,
+                 "model.cold_start_fuel_temperature_sensitivity");
+    positive(model.idle_engine_speed_rpm, "model.idle_engine_speed_rpm");
+    non_negative(model.engine_speed_per_kilometre_per_hour,
+                 "model.engine_speed_per_kilometre_per_hour");
+    non_negative(model.base_rolling_resistance,
+                 "model.base_rolling_resistance");
+    non_negative(model.wet_rolling_resistance_increase,
+                 "model.wet_rolling_resistance_increase");
+    non_negative(model.pressure_rolling_resistance_sensitivity,
+                 "model.pressure_rolling_resistance_sensitivity");
+
+    non_negative(model.speed_style_sensitivity,
+                 "model.speed_style_sensitivity");
+    non_negative(model.stop_style_sensitivity,
+                 "model.stop_style_sensitivity");
+    non_negative(model.lateral_style_sensitivity,
+                 "model.lateral_style_sensitivity");
+    non_negative(model.brake_onset_style_sensitivity,
+                 "model.brake_onset_style_sensitivity");
+    non_negative(model.acceleration_style_sensitivity,
+                 "model.acceleration_style_sensitivity");
 
     const auto& maintenance_check = config.maintenance;
     positive(maintenance_check.oil_change_interval_kilometres,
@@ -1374,30 +1611,44 @@ bool validate_config(const Config& config, Diagnostics& diagnostics) {
              "model.exhaust_replacement_wear_index");
     in_range(model.cooling_replacement_wear_index, 0.0, 1.0,
              "model.cooling_replacement_wear_index");
-    in_range(model.exhaust_emissions_threshold, 0.0, 1.0,
-             "model.exhaust_emissions_threshold");
-    in_range(model.catalyst_emissions_threshold, 0.0, 1.0,
-             "model.catalyst_emissions_threshold");
 
     const auto& costs = config.costs;
-    const double cost_values[] = {
-        costs.engine_oil_and_filter_euros,   costs.inspection_euros,
-        costs.brake_fluid_euros,             costs.coolant_euros,
-        costs.spark_plugs_euros,             costs.air_filter_euros,
-        costs.cabin_filter_euros,            costs.wiper_blades_euros,
-        costs.tire_rotation_euros,           costs.seasonal_tire_swap_euros,
-        costs.front_brake_pads_euros,        costs.rear_brake_pads_euros,
-        costs.front_brake_discs_euros,       costs.rear_brake_discs_euros,
-        costs.tire_per_corner_euros,         costs.battery_euros,
-        costs.suspension_euros,              costs.clutch_or_transmission_euros,
-        costs.exhaust_euros,                 costs.catalyst_euros,
-        costs.cooling_euros,                 costs.windshield_euros,
-        costs.paint_repair_euros,            costs.engine_repair_rings_euros,
-        costs.engine_repair_bearings_euros,  costs.engine_repair_turbocharger_euros,
-        costs.engine_repair_seals_euros,     costs.engine_repair_ignition_euros,
-        costs.engine_repair_timing_euros};
-    for (double value : cost_values) {
-        non_negative(value, "costs.*");
+    const std::pair<std::string_view, double> cost_values[] = {
+        {"costs.engine_oil_and_filter_euros", costs.engine_oil_and_filter_euros},
+        {"costs.inspection_euros", costs.inspection_euros},
+        {"costs.brake_fluid_euros", costs.brake_fluid_euros},
+        {"costs.coolant_euros", costs.coolant_euros},
+        {"costs.spark_plugs_euros", costs.spark_plugs_euros},
+        {"costs.air_filter_euros", costs.air_filter_euros},
+        {"costs.cabin_filter_euros", costs.cabin_filter_euros},
+        {"costs.wiper_blades_euros", costs.wiper_blades_euros},
+        {"costs.tire_rotation_euros", costs.tire_rotation_euros},
+        {"costs.seasonal_tire_swap_euros", costs.seasonal_tire_swap_euros},
+        {"costs.front_brake_pads_euros", costs.front_brake_pads_euros},
+        {"costs.rear_brake_pads_euros", costs.rear_brake_pads_euros},
+        {"costs.front_brake_discs_euros", costs.front_brake_discs_euros},
+        {"costs.rear_brake_discs_euros", costs.rear_brake_discs_euros},
+        {"costs.tire_per_corner_euros", costs.tire_per_corner_euros},
+        {"costs.battery_euros", costs.battery_euros},
+        {"costs.suspension_euros", costs.suspension_euros},
+        {"costs.clutch_or_transmission_euros",
+         costs.clutch_or_transmission_euros},
+        {"costs.exhaust_euros", costs.exhaust_euros},
+        {"costs.catalyst_euros", costs.catalyst_euros},
+        {"costs.cooling_euros", costs.cooling_euros},
+        {"costs.windshield_euros", costs.windshield_euros},
+        {"costs.paint_repair_euros", costs.paint_repair_euros},
+        {"costs.engine_repair_rings_euros", costs.engine_repair_rings_euros},
+        {"costs.engine_repair_bearings_euros",
+         costs.engine_repair_bearings_euros},
+        {"costs.engine_repair_turbocharger_euros",
+         costs.engine_repair_turbocharger_euros},
+        {"costs.engine_repair_seals_euros", costs.engine_repair_seals_euros},
+        {"costs.engine_repair_ignition_euros",
+         costs.engine_repair_ignition_euros},
+        {"costs.engine_repair_timing_euros", costs.engine_repair_timing_euros}};
+    for (const auto& [key, value] : cost_values) {
+        non_negative(value, key);
     }
 
     const auto& economics = config.economics;
@@ -1413,13 +1664,25 @@ bool validate_config(const Config& config, Diagnostics& diagnostics) {
                  "economics.depreciation_euros_per_kilometre");
     non_negative(economics.depreciation_euros_per_year,
                  "economics.depreciation_euros_per_year");
+    if (economics.budget_euros.has_value()) {
+        non_negative(*economics.budget_euros, "economics.budget_euros");
+    }
 
     const auto check_route = [&](const RouteClassConfig& route, std::string_view name) {
-        positive(route.mean_speed_kph, name);
-        non_negative(route.stop_density_per_kilometre, name);
-        non_negative(route.lateral_acceleration_metres_per_second_squared, name);
-        probability(route.idle_fraction, name);
-        probability(route.brake_onset_speed_fraction, name);
+        positive(route.mean_speed_kph, std::format("{}.mean_speed_kph", name));
+        non_negative(route.stop_density_per_kilometre,
+                     std::format("{}.stop_density_per_kilometre", name));
+        non_negative(route.lateral_acceleration_metres_per_second_squared,
+                     std::format(
+                         "{}.lateral_acceleration_metres_per_second_squared", name));
+        probability(route.idle_fraction,
+                    std::format("{}.idle_fraction", name));
+        probability(route.brake_onset_speed_fraction,
+                    std::format("{}.brake_onset_speed_fraction", name));
+        non_negative(route.positive_acceleration_metres_per_second_squared,
+                     std::format(
+                         "{}.positive_acceleration_metres_per_second_squared",
+                         name));
     };
     check_route(config.route_classes.city, "route_classes.city");
     check_route(config.route_classes.rural, "route_classes.rural");
@@ -1429,14 +1692,22 @@ bool validate_config(const Config& config, Diagnostics& diagnostics) {
     return !diagnostics.has_errors() && !failed_before;
 }
 
+constexpr std::array<std::string_view, 6> kClimateZones = {
+    "temperate-maritime", "continental", "alpine",
+    "mediterranean",      "nordic",      "arid"};
+
 bool is_known_climate_zone(const std::string& name) {
-    return name == "temperate-maritime" || name == "continental" || name == "alpine" ||
-           name == "mediterranean" || name == "nordic" || name == "arid";
+    return std::find(kClimateZones.begin(), kClimateZones.end(), name) !=
+           kClimateZones.end();
 }
 
 std::vector<std::string> known_climate_zones() {
-    return {"temperate-maritime", "continental", "alpine",
-            "mediterranean",       "nordic",     "arid"};
+    std::vector<std::string> names;
+    names.reserve(kClimateZones.size());
+    for (std::string_view zone : kClimateZones) {
+        names.emplace_back(zone);
+    }
+    return names;
 }
 
 ClimateConfig climate_preset(const std::string& name) {
@@ -1530,8 +1801,8 @@ ClimateConfig climate_preset(const std::string& name) {
         climate.zone = "custom";
         climate.winter_tires = false;
     } else {
-        // Maritime is the default preset.
-        climate.monthly_temperature_mean_celsius = preset_temperature_maritime();
+        // Maritime is the default preset. The monthly climate arrays come from
+        // the ClimateConfig defaults, so there is one definition of them.
         climate.precipitation_persistence = 0.65;
         climate.road_roughness_index = 0.25;
         climate.traffic_density_index = 0.45;

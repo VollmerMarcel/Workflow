@@ -156,7 +156,7 @@ const std::array<PartDefinition, 14> kParts{{
     {"exhaust", "Exhaust", "index", true, true},
     {"catalyst", "Catalyst", "index", true, false},
     {"cooling_system", "Cooling system", "index", true, true},
-    {"paint", "Paint", "index", false, false},
+    {"paint", "Paint", "index", true, false},
     {"windshield", "Windshield", "chips", true, true},
 }};
 

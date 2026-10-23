@@ -81,8 +81,11 @@ file only states what differs from the default case. The loader:
 5. warns about unknown keys instead of silently ignoring them.
 
 `serialize` emits the fully resolved configuration, which `carwear config`
-prints. A loaded `Config` is immutable during a run. Any stochastic
-current-state value lives in `ResolvedInputs`, not in `Config`.
+prints. The model and the harness treat a loaded `Config` as read-only for the
+duration of a run. The command layer may set output flags such as
+`output.write_trips` from a CLI option before the run starts; no model or
+harness code mutates the configuration. Any stochastic current-state value
+lives in `ResolvedInputs`, not in `Config`.
 
 Climate zones are presets, not magic values: `climate.zone` selects a baseline,
 and any explicitly supplied key in `[climate]` overrides that baseline. `custom`

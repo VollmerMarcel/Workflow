@@ -311,7 +311,7 @@ The harness draws a frailty factor for each run and passes it into the resolved 
 frailty = exp( normal( 0, sigmaFrailty ) )
 ```
 
-The factor multiplies every random failure hazard for that run. It produces clustering: a car that suffers one unexpected failure is more likely to suffer another. Without frailty, failures are unrealistically independent and the cost tail is too thin.
+The factor multiplies every component reliability hazard for that run: the engine, suspension, clutch, exhaust, cooling, and battery no-start hazards. It does not multiply environmental event processes such as windshield chip formation or crack propagation, which depend on the road and the weather rather than on the car's reliability. It produces clustering: a car that suffers one unexpected failure is more likely to suffer another. Without frailty, failures are unrealistically independent and the cost tail is too thin.
 
 `sigmaFrailty` is a configurable prior, nominally 0.45.
 
@@ -627,7 +627,7 @@ cornerLoadFactor = (massVehicle / referenceMass)^tireLoadWearExponent
 
 pressureFactor = (referencePressure / effectivePressure)^tirePressureWearExponent
 
-effectivePressure = measuredPressure * (293.15 / (273.15 + ambientTemperature))
+effectivePressure = measuredPressure * ((273.15 + ambientTemperature) / 293.15)
 
 lateralFactor = 1 + tireLateralWearSensitivity
                 * (lateralAcceleration * (1 + style))^2
@@ -1076,7 +1076,7 @@ p90 = 2410.0
 p95 = 2580.0
 tail_average_95 = 2720.0
 
-[[part_prognoses]]
+[[aggregate.part_prognoses]]
 id = "front_brake_pads"
 label = "Front brake pads"
 unit = "millimetres"
@@ -1086,12 +1086,12 @@ replacement_probability = 0.12
 failure_probability = 0.0
 expected_cost_euros = 11.0
 
-[part_prognoses.state_at_horizon]
+[aggregate.part_prognoses.state_at_horizon]
 p10 = 4.8
 p50 = 6.1
 p90 = 7.4
 
-[[failures]]
+[[aggregate.failures]]
 id = "battery"
 probability_at_least_one = 0.04
 expected_count = 0.04
@@ -1445,7 +1445,7 @@ All values are defaults and all are overridable. Provenance classes: physical, s
 | `exhaustSaltCorrosionPerDay` | 1 / 1,200 | per day | engineering estimate |
 | `exhaustHumidityCorrosionPerDay` | 1 / 8,000 | per day | engineering estimate |
 | `catalystDegradationPerKilometre` | 1 / 200,000 | per kilometre | engineering estimate |
-| `catalystOilPoisoningFactor` | 1.0 | dimensionless | engineering estimate |
+| `catalystOilPoisoningPerLitre` | 0.05 | index per litre | engineering estimate |
 | `exhaustEmissionsThreshold` | 0.70 | index | engineering estimate |
 | `catalystEmissionsThreshold` | 0.70 | index | engineering estimate |
 | `exhaustReplacementWearIndex` | 0.80 | index | engineering estimate |
@@ -1461,9 +1461,13 @@ All values are defaults and all are overridable. Provenance classes: physical, s
 | `saltDamagePerDay` | 1 / 6,000 | per day | engineering estimate |
 | `gritDamagePerKilometre` | 1 / 400,000 | per kilometre | engineering estimate |
 | `stoneChipRatePerHighwayKilometre` | 0.002 | per kilometre | engineering estimate |
+| `stoneChipSpeedReference` | 100 | kilometres per hour | engineering estimate |
 | `stoneChipDamage` | 0.004 | index | engineering estimate |
 | `hailDamage` | 0.15 | index | engineering estimate |
 | `parkingDingRatePerDay` | 0.0002 | per day | engineering estimate |
+| `parkingDingMultiplierStreet` | 1.0 | dimensionless | engineering estimate |
+| `parkingDingMultiplierCarport` | 0.5 | dimensionless | engineering estimate |
+| `parkingDingMultiplierGarage` | 0.2 | dimensionless | engineering estimate |
 | `washProtectionPerWashPerMonth` | 0.05 | fraction | engineering estimate |
 | `rustThreshold` | 0.55 | index | engineering estimate |
 | `rustGrowthPerWetSaltDay` | 0.002 | index per day | engineering estimate |

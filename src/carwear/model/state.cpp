@@ -154,12 +154,20 @@ ResolvedInputs resolve_inputs(const Config& config, std::uint64_t sample_seed,
                    uncertainty.tire_tread_millimetres[i],
                    model.tire_tread_wear_limit_millimetres,
                    vehicle.tire_new_tread_millimetres);
+        state.winter_tire_tread_millimetres[i] =
+            sample(state.winter_tire_tread_millimetres[i],
+                   uncertainty.winter_tire_tread_millimetres[i],
+                   model.tire_tread_wear_limit_millimetres,
+                   vehicle.tire_new_tread_millimetres);
         state.tire_pressure_bar[i] =
             sample(state.tire_pressure_bar[i], uncertainty.tire_pressure_bar[i], 0.5,
                    5.0);
     }
     state.tire_age_years =
         sample(state.tire_age_years, uncertainty.tire_age_years, 0.0, 20.0);
+    state.winter_tire_age_years =
+        sample(state.winter_tire_age_years, uncertainty.winter_tire_age_years, 0.0,
+               20.0);
 
     state.battery_state_of_health =
         sample(state.battery_state_of_health, uncertainty.battery_state_of_health,

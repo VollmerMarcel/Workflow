@@ -163,9 +163,10 @@ std::vector<Drive> TripGenerator::generate(int day, const Date& date,
         drives.push_back(make_drive(TripPurpose::long_trip, day, weather));
     }
 
-    std::sort(drives.begin(), drives.end(), [](const Drive& lhs, const Drive& rhs) {
-        return lhs.start_minute < rhs.start_minute;
-    });
+    std::stable_sort(drives.begin(), drives.end(),
+                     [](const Drive& lhs, const Drive& rhs) {
+                         return lhs.start_minute < rhs.start_minute;
+                     });
 
     const double threshold_minutes = model.cold_start_threshold_minutes;
     int previous_end = -1;

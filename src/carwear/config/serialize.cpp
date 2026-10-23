@@ -1,6 +1,7 @@
 #include "carwear/config/serialize.h"
 
 #include <array>
+#include <locale>
 #include <sstream>
 #include <string_view>
 
@@ -194,6 +195,9 @@ toml::table config_to_toml(const Config& config) {
             corner_array(value.tire_tread_millimetres));
         put(uncertainty, "tire_pressure_bar", corner_array(value.tire_pressure_bar));
         put(uncertainty, "tire_age_years", value.tire_age_years);
+        put(uncertainty, "winter_tire_tread_millimetres",
+            corner_array(value.winter_tire_tread_millimetres));
+        put(uncertainty, "winter_tire_age_years", value.winter_tire_age_years);
         put(uncertainty, "battery_state_of_health", value.battery_state_of_health);
         put(uncertainty, "battery_age_years", value.battery_age_years);
         put(uncertainty, "suspension_wear_index", value.suspension_wear_index);
@@ -482,8 +486,8 @@ toml::table config_to_toml(const Config& config) {
             model.exhaust_humidity_corrosion_per_day);
         put(table, "catalyst_degradation_per_kilometre",
             model.catalyst_degradation_per_kilometre);
-        put(table, "catalyst_oil_poisoning_factor",
-            model.catalyst_oil_poisoning_factor);
+        put(table, "catalyst_oil_poisoning_per_litre",
+            model.catalyst_oil_poisoning_per_litre);
         put(table, "exhaust_emissions_threshold",
             model.exhaust_emissions_threshold);
         put(table, "catalyst_emissions_threshold",
@@ -501,9 +505,17 @@ toml::table config_to_toml(const Config& config) {
         put(table, "grit_damage_per_kilometre", model.grit_damage_per_kilometre);
         put(table, "stone_chip_rate_per_highway_kilometre",
             model.stone_chip_rate_per_highway_kilometre);
+        put(table, "stone_chip_speed_reference_kph",
+            model.stone_chip_speed_reference_kph);
         put(table, "stone_chip_damage", model.stone_chip_damage);
         put(table, "hail_damage", model.hail_damage);
         put(table, "parking_ding_rate_per_day", model.parking_ding_rate_per_day);
+        put(table, "parking_ding_multiplier_street",
+            model.parking_ding_multiplier_street);
+        put(table, "parking_ding_multiplier_carport",
+            model.parking_ding_multiplier_carport);
+        put(table, "parking_ding_multiplier_garage",
+            model.parking_ding_multiplier_garage);
         put(table, "wash_protection_per_wash_per_month",
             model.wash_protection_per_wash_per_month);
         put(table, "rust_threshold", model.rust_threshold);
@@ -630,6 +642,7 @@ toml::table config_to_toml(const Config& config) {
 
 std::string config_to_toml_string(const Config& config) {
     std::ostringstream stream;
+    stream.imbue(std::locale::classic());
     stream << config_to_toml(config);
     return stream.str();
 }

@@ -79,10 +79,10 @@ struct CurrentStateConfig {
     double oil_level_fraction = 1.0;
     double turbo_wear_index = 0.0;
 
-    double front_pad_millimetres = 9.0;
+    double front_pad_millimetres = 9.5;
     double rear_pad_millimetres = 8.0;
-    double front_disc_millimetres = 24.4;
-    double rear_disc_millimetres = 9.4;
+    double front_disc_millimetres = 24.25;
+    double rear_disc_millimetres = 9.5;
 
     std::array<double, 4> tire_tread_millimetres{5.0, 5.0, 5.0, 5.0};
     std::array<double, 4> tire_pressure_bar{2.3, 2.3, 2.3, 2.3};
@@ -128,6 +128,8 @@ struct StateUncertainty {
     std::array<double, 4> tire_tread_millimetres{0.5, 0.5, 0.5, 0.5};
     std::array<double, 4> tire_pressure_bar{0.1, 0.1, 0.1, 0.1};
     double tire_age_years = 0.0;
+    std::array<double, 4> winter_tire_tread_millimetres{0.5, 0.5, 0.5, 0.5};
+    double winter_tire_age_years = 0.0;
 
     double battery_state_of_health = 0.05;
     double battery_age_years = 0.0;
@@ -191,10 +193,10 @@ struct ClimateConfig {
                                             6.0, 5.0, 3.5, 2.0, 1.0, 0.6};
 
     double temperature_autocorrelation = 0.70;
-    double precipitation_persistence = 0.60;
+    double precipitation_persistence = 0.65;
     double snow_temperature_threshold_celsius = 1.0;
     double frost_temperature_threshold_celsius = 1.0;
-    double salt_probability_on_frost_day = 0.70;
+    double salt_probability_on_frost_day = 0.60;
     double annual_hail_days = 1.0;
     double road_roughness_index = 0.25;
     double traffic_density_index = 0.45;
@@ -362,7 +364,7 @@ struct ModelConfig {
     double exhaust_salt_corrosion_per_day = 1.0 / 1200.0;
     double exhaust_humidity_corrosion_per_day = 1.0 / 8000.0;
     double catalyst_degradation_per_kilometre = 1.0 / 200000.0;
-    double catalyst_oil_poisoning_factor = 1.0;
+    double catalyst_oil_poisoning_per_litre = 0.05;
     double exhaust_emissions_threshold = 0.70;
     double catalyst_emissions_threshold = 0.70;
     double exhaust_replacement_wear_index = 0.80;
@@ -375,9 +377,13 @@ struct ModelConfig {
     double salt_damage_per_day = 1.0 / 6000.0;
     double grit_damage_per_kilometre = 1.0 / 400000.0;
     double stone_chip_rate_per_highway_kilometre = 0.002;
+    double stone_chip_speed_reference_kph = 100.0;
     double stone_chip_damage = 0.004;
     double hail_damage = 0.15;
     double parking_ding_rate_per_day = 0.0002;
+    double parking_ding_multiplier_street = 1.0;
+    double parking_ding_multiplier_carport = 0.5;
+    double parking_ding_multiplier_garage = 0.2;
     double wash_protection_per_wash_per_month = 0.05;
     double rust_threshold = 0.55;
     double rust_growth_per_wet_salt_day = 0.002;
