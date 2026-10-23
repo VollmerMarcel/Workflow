@@ -38,5 +38,5 @@
 
 ## Gotchas
 
-- `README.md` is **UTF-16LE with BOM** and reads as binary to many tools. Leave it, or convert to UTF-8 in a dedicated commit.
-- Write new source and CMake files as UTF-8 without BOM, LF endings — don't inherit the README's encoding.
+- `README.md` is UTF-8 without BOM with LF endings. Keep it that way.
+- Write new source and CMake files as UTF-8 without BOM, LF endings.
