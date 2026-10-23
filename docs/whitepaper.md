@@ -736,7 +736,7 @@ exhaustCorrosionIncrement =
 
 catalystDegradationIncrement =
       distance * catalystDegradationPerKilometre
-    + oilBurned * catalystOilPoisoningFactor
+    + oilBurned * catalystOilPoisoningPerLitre
 ```
 
 Short trips produce condensation, which corrodes the exhaust from the inside. Burning oil poisons the catalyst. The latter is a feedback loop from engine wear to emissions cost.
