@@ -1044,11 +1044,20 @@ item = "battery"
 cost_euros = 161.5
 
 [[run.monthly]]
-month = 1
+month = 10
+start_day = 1
+end_day = 31
 cost_euros = 178.4
+cumulative_cost_euros = 178.4
+fuel_litres = 67.2
+failures = 0
 front_pad_millimetres = 8.8
 tire_tread_millimetres = 4.9
 ```
+
+`month` is the calendar month. `start_day` and `end_day` are 1-based day
+offsets within the horizon, so a horizon that does not start on a month
+boundary still produces a bounded first and last snapshot.
 
 A single run has no percentiles, no means, and no probabilities. Those are properties of a set of runs, not of one run. Optional content is omitted rather than encoded with a sentinel: an event that did not occur is simply absent from `[run.events]`.
 
