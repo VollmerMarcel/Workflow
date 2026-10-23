@@ -1,0 +1,60 @@
+schema_version = "1.0"
+
+# A mid-size petrol car used for a five-day commute in a temperate maritime
+# climate. This is the reference case used in the whitepaper's worked example.
+
+[case]
+name = "temperate-commuter"
+start_date = 2026-11-01
+horizon_days = 365
+
+[run]
+run_seed = 20261021
+
+[monte_carlo]
+number_of_runs = 2000
+master_seed = 20261021
+sample_epistemic_uncertainty = true
+
+[output]
+directory = "output/temperate-commuter"
+write_run_tables = true
+write_runs_csv = true
+write_trips = false
+
+[vehicle]
+mass_kilograms = 1450.0
+drag_area_square_metres = 0.68
+engine_displacement_litres = 1.5
+turbocharged = true
+transmission = "manual"
+drivetrain = "front"
+odometer_kilometres = 85000.0
+vehicle_age_years = 6.0
+
+[user]
+commute_distance_kilometres = 25.0
+commute_distance_coefficient_of_variation = 0.25
+commute_days_per_week = 5
+
+errand_trips_per_week = 4.0
+errand_distance_kilometres = 4.0
+errand_distance_coefficient_of_variation = 0.40
+
+weekend_trips_per_week = 1.0
+weekend_distance_kilometres = 30.0
+weekend_distance_coefficient_of_variation = 0.50
+
+long_trips_per_year = 6.0
+long_trip_distance_kilometres = 400.0
+long_trip_distance_coefficient_of_variation = 0.40
+
+style_aggressiveness = 0.4
+maintenance_adherence = 0.7
+parking = "street"
+part_quality = 0.6
+washing_per_month = 1.0
+air_conditioning = true
+
+[climate]
+zone = "temperate-maritime"

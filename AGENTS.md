@@ -2,9 +2,12 @@
 
 ## Current state
 
-- Greenfield: no source, `CMakeLists.txt`, or CI yet. Only `README.md`, this file, and a minimal `.gitignore`.
+- Implemented: static `carwear_lib`, the `carwear` CLI (`run`, `monte-carlo`, `config`, `zones`), the model and Monte Carlo harness, TOML/CSV output, and a GoogleTest suite wired through CTest.
 - **Toolchain installed and verified end-to-end (2026-10-21):** GCC 16.2.0, CMake 4.4.4, Ninja 1.13.2, Conan 2.33.0 — a C++20 CMake+Ninja smoke build compiled and ran.
+- Model: `docs/whitepaper.md` is the specification and the guardrail. Implementation architecture, module boundaries, and workflow: `docs/architecture.md`.
+- Example cases: `cases/temperate-commuter.toml`, `cases/continental-short-trips.toml`, `cases/nordic-winter.toml`.
 - Additional UCRT64 packages: `pacman -S mingw-w64-ucrt-x86_64-<name>`.
+- Configure/build/test: `cmake --preset conan-release`, `cmake --build build/Release --parallel`, `ctest --test-dir build/Release --output-on-failure`.
 
 ## Toolchain: MSYS2 UCRT64
 
@@ -27,7 +30,7 @@
 
 ## Testing
 
-- Google Test, run through CMake/CTest. Single case: `ctest --test-dir build -R <Suite.Case> -V`, or `--gtest_filter=<Suite.Case>` on the test binary.
+- Google Test, run through CMake/CTest. Single case: `ctest --test-dir build/Release -R <Suite.Case> -V`, or `--gtest_filter=<Suite.Case>` on `build/Release/tests/carwear_tests.exe`.
 
 ## Git
 
