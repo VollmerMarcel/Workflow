@@ -70,9 +70,14 @@ VarianceDecomposition decompose_variance(
     }
     within_variance = total_weight > 0.0 ? within_variance / total_weight : 0.0;
 
+    // The average group size, rather than the nominal runs_per_sample, keeps
+    // the correction unbiased when the final sample is partial.
+    const double average_group_size =
+        group_sizes.empty()
+            ? 0.0
+            : total_weight / static_cast<double>(group_sizes.size());
     const double sampling_variance_of_mean =
-        runs_per_sample > 0 ? within_variance / static_cast<double>(runs_per_sample)
-                            : 0.0;
+        average_group_size > 0.0 ? within_variance / average_group_size : 0.0;
     const double epistemic_variance =
         std::max(0.0, between_variance - sampling_variance_of_mean);
     const double total_variance = within_variance + epistemic_variance;

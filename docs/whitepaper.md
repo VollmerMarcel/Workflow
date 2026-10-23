@@ -284,7 +284,10 @@ A set of runs mixes two fundamentally different things. The model itself does no
 The harness keeps them separable. Epistemic sampling can be switched off to obtain the aleatory-only distribution, and the aggregate can show the variance decomposition:
 
 ```
-totalVariance = meanOverSamples( withinSampleVariance ) + varianceOverSamples( meanOutcomePerSample )
+withinVariance  = meanOverSamples( withinSampleVariance )
+betweenVariance = varianceOverSamples( meanOutcomePerSample )
+epistemicVariance = max( 0, betweenVariance - withinVariance / meanSampleSize )
+totalVariance = withinVariance + epistemicVariance
 ```
 
 Here a sample is one resolved case with one set of epistemic draws, and the runs sharing that sample differ only in their run seed. The first term is aleatory, the second is epistemic. This tells the user whether the answer is limited by luck or by missing information.
