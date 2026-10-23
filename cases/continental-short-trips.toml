@@ -1,0 +1,80 @@
+schema_version = "1.0"
+
+# An older car used mostly for short city errands in a continental climate.
+# Low annual distance, many cold starts, and deferred maintenance place the
+# wear burden on the exhaust, battery, and brakes rather than on tires.
+
+[case]
+name = "continental-short-trips"
+start_date = 2026-10-01
+horizon_days = 365
+
+[run]
+run_seed = 20261022
+
+[monte_carlo]
+number_of_runs = 2000
+master_seed = 20261022
+sample_epistemic_uncertainty = true
+
+[output]
+directory = "output/continental-short-trips"
+write_run_tables = true
+write_runs_csv = true
+write_trips = false
+
+[vehicle]
+mass_kilograms = 1320.0
+drag_area_square_metres = 0.64
+engine_displacement_litres = 1.4
+turbocharged = false
+transmission = "manual"
+drivetrain = "front"
+odometer_kilometres = 120000.0
+vehicle_age_years = 10.0
+
+[user]
+commute_distance_kilometres = 8.0
+commute_distance_coefficient_of_variation = 0.35
+commute_days_per_week = 5
+
+errand_trips_per_week = 6.0
+errand_distance_kilometres = 3.0
+errand_distance_coefficient_of_variation = 0.50
+
+weekend_trips_per_week = 1.0
+weekend_distance_kilometres = 15.0
+weekend_distance_coefficient_of_variation = 0.60
+
+long_trips_per_year = 3.0
+long_trip_distance_kilometres = 300.0
+long_trip_distance_coefficient_of_variation = 0.40
+
+style_aggressiveness = 0.3
+maintenance_adherence = 0.5
+parking = "street"
+part_quality = 0.5
+washing_per_month = 0.5
+air_conditioning = true
+
+[climate]
+zone = "continental"
+
+[current_state]
+oil_degradation = 0.7
+oil_level_fraction = 0.85
+front_pad_thickness_millimetres = 7.0
+rear_pad_thickness_millimetres = 6.5
+battery_state_of_health = 0.72
+battery_age_years = 7.0
+exhaust_corrosion_index = 0.45
+catalyst_degradation_index = 0.35
+cooling_wear_index = 0.40
+paint_damage_index = 0.45
+windshield_chip_count = 2
+
+[maintenance]
+oil_change_interval_kilometres = 15000.0
+oil_change_interval_months = 12.0
+max_deferral_days = 90.0
+max_deferral_kilometres = 3000.0

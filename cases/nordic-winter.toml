@@ -1,0 +1,73 @@
+schema_version = "1.0"
+
+# A newer car with a long commute in a Nordic climate. Seasonal tire swaps,
+# road salt, studded winter tires, and cold starts dominate the year.
+
+[case]
+name = "nordic-winter"
+start_date = 2026-10-01
+horizon_days = 365
+
+[run]
+run_seed = 20261023
+
+[monte_carlo]
+number_of_runs = 2000
+master_seed = 20261023
+sample_epistemic_uncertainty = true
+
+[output]
+directory = "output/nordic-winter"
+write_run_tables = true
+write_runs_csv = true
+write_trips = false
+
+[vehicle]
+mass_kilograms = 1580.0
+drag_area_square_metres = 0.74
+engine_displacement_litres = 2.0
+turbocharged = true
+transmission = "automatic"
+drivetrain = "all"
+odometer_kilometres = 65000.0
+vehicle_age_years = 4.0
+
+[user]
+commute_distance_kilometres = 40.0
+commute_distance_coefficient_of_variation = 0.20
+commute_days_per_week = 5
+
+errand_trips_per_week = 3.0
+errand_distance_kilometres = 5.0
+errand_distance_coefficient_of_variation = 0.35
+
+weekend_trips_per_week = 1.5
+weekend_distance_kilometres = 60.0
+weekend_distance_coefficient_of_variation = 0.45
+
+long_trips_per_year = 4.0
+long_trip_distance_kilometres = 500.0
+long_trip_distance_coefficient_of_variation = 0.30
+
+style_aggressiveness = 0.5
+maintenance_adherence = 0.8
+parking = "carport"
+part_quality = 0.7
+washing_per_month = 0.5
+winter_tires = true
+air_conditioning = true
+
+[climate]
+zone = "nordic"
+
+[current_state]
+tire_tread_millimetres = [6.0, 6.0, 6.0, 6.0]
+tire_age_years = 2.0
+winter_tire_tread_millimetres = [7.8, 7.8, 7.8, 7.8]
+winter_tire_age_years = 2.0
+battery_state_of_health = 0.88
+battery_age_years = 4.0
+
+[maintenance]
+seasonal_tire_swap_spring_month = 4
+seasonal_tire_swap_autumn_month = 10

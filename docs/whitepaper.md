@@ -1357,20 +1357,28 @@ All values are defaults and all are overridable. Provenance classes: physical, s
 |---|---|---|---|
 | `coldStartWearBaseKilometres` | 5 | equivalent km | engineering estimate |
 | `coldStartWearTemperatureScale` | 20 | degrees Celsius | engineering estimate |
+| `coldStartWearMinimum` | 0.5 | equivalent km | engineering estimate |
 | `coldStartWearMaximum` | 20 | equivalent km | engineering estimate |
 | `coldStartThreshold` | 120 | minutes | engineering estimate |
 | `shortTripDistance` | 5 | kilometres | engineering estimate |
+| `warmUpIdleFactor` | 0.10 | dimensionless | engineering estimate |
+| `engineLoadWearSensitivity` | 0.30 | dimensionless | engineering estimate |
 | `engineDesignLife` | 250,000 | kilometres | engineering estimate |
 | `oilDegradationPerKilometre` | 1 / 15,000 | per kilometre | specification |
 | `oilDegradationPerColdStart` | 1 / 900 | per event | engineering estimate |
+| `oilDegradationPerShortTrip` | 1 / 2,000 | per event | engineering estimate |
 | `oilDegradationPerDay` | 1 / 900 | per day | engineering estimate |
 | `oilWearSensitivity` | 1.5 | dimensionless | engineering estimate |
 | `oilWearExponent` | 2 | dimensionless | engineering estimate |
 | `oilLevelCriticalFraction` | 0.25 | fraction | specification |
 | `oilLevelStarvationWearFactor` | 2 | dimensionless | engineering estimate |
 | `oilStarvationHazardMultiplier` | 30 | dimensionless | engineering estimate |
+| `baseOilConsumption` | 0.05 | litres per 1,000 km | specification |
+| `wearOilConsumptionGrowth` | 0.50 | dimensionless | engineering estimate |
 | `turboWearPerCycle` | 0.00001 | per event | engineering estimate |
+| `turboHeatSensitivity` | 0.50 | dimensionless | engineering estimate |
 | `turboHotShutdownWear` | 0.01 | per event | engineering estimate |
+| `turboHotShutdownLoadThreshold` | 1.25 | load fraction | engineering estimate |
 
 ### B.2 Brakes
 
@@ -1383,6 +1391,7 @@ All values are defaults and all are overridable. Provenance classes: physical, s
 | `brakeTemperatureWearStart` | 250 | degrees Celsius | engineering estimate |
 | `brakeTemperatureWearFactor` | 2 | dimensionless | engineering estimate |
 | `brakeCorrosionPerSaltDay` | 0.003 | mm per day | engineering estimate |
+| `padCompoundFactor` | 1.0 | dimensionless | engineering estimate |
 | `brakeFluidLife` | 24 | months | specification |
 
 ### B.3 Tires
@@ -1401,6 +1410,10 @@ All values are defaults and all are overridable. Provenance classes: physical, s
 | `referencePressure` | 2.3 | bar | specification |
 | `wetSurfaceWearIncrease` | 0.05 | dimensionless | engineering estimate |
 | `gravelSurfaceWearIncrease` | 0.30 | dimensionless | engineering estimate |
+| `tireTreadWearLimit` | 1.6 | millimetres | specification |
+| `frontAxleTireShareFrontWheelDrive` | 0.60 | fraction | engineering estimate |
+| `frontAxleTireShareRearWheelDrive` | 0.40 | fraction | engineering estimate |
+| `frontAxleTireShareAllWheelDrive` | 0.50 | fraction | engineering estimate |
 
 ### B.4 Battery
 
@@ -1409,6 +1422,8 @@ All values are defaults and all are overridable. Provenance classes: physical, s
 | `batteryAgeFactor` | 0.04 | per square-root year | literature prior |
 | `batteryHeatDamage` | 0.00001 | per degree-day above 25 | literature prior |
 | `batteryCycleDamage` | 0.000001 | per start | literature prior |
+| `batteryDeepDischargeDamage` | 0.005 | per event | engineering estimate |
+| `batteryDeepDischargeTripDistance` | 2 | kilometres | engineering estimate |
 | `batteryRequiredHealthBase` | 0.30 | dimensionless | engineering estimate |
 | `batteryRequiredHealthPerDegree` | 0.005 | per degree below 20 | engineering estimate |
 | `batteryFailureSteepness` | 25 | dimensionless | engineering estimate |
@@ -1418,14 +1433,25 @@ All values are defaults and all are overridable. Provenance classes: physical, s
 | Constant | Nominal value | Unit | Provenance |
 |---|---|---|---|
 | `suspensionWearPerKilometre` | 1 / 120,000 | per kilometre | engineering estimate |
+| `roadRoughnessSensitivity` | 1.0 | dimensionless | engineering estimate |
+| `corneringWearSensitivity` | 0.50 | dimensionless | engineering estimate |
+| `suspensionReplacementWearIndex` | 0.80 | index | engineering estimate |
 | `clutchWearPerStartManual` | 1 / 150,000 | per start | engineering estimate |
 | `clutchWearPerStartAutomatic` | 1 / 600,000 | per start | engineering estimate |
+| `clutchStyleSensitivity` | 0.50 | dimensionless | engineering estimate |
+| `clutchReplacementWearIndex` | 0.80 | index | engineering estimate |
 | `exhaustCorrosionPerDay` | 1 / 3,650 | per day | engineering estimate |
 | `shortTripCorrosionFactor` | 3 | dimensionless | engineering estimate |
 | `exhaustSaltCorrosionPerDay` | 1 / 1,200 | per day | engineering estimate |
+| `exhaustHumidityCorrosionPerDay` | 1 / 8,000 | per day | engineering estimate |
 | `catalystDegradationPerKilometre` | 1 / 200,000 | per kilometre | engineering estimate |
+| `catalystOilPoisoningFactor` | 1.0 | dimensionless | engineering estimate |
+| `exhaustEmissionsThreshold` | 0.70 | index | engineering estimate |
+| `catalystEmissionsThreshold` | 0.70 | index | engineering estimate |
+| `exhaustReplacementWearIndex` | 0.80 | index | engineering estimate |
 | `coolingWearPerDay` | 1 / 3,650 | per day | engineering estimate |
 | `coolingWearPerThermalCycle` | 1 / 5,000 | per trip | engineering estimate |
+| `coolingReplacementWearIndex` | 0.80 | index | engineering estimate |
 
 ### B.6 Paint and windshield
 
@@ -1440,8 +1466,14 @@ All values are defaults and all are overridable. Provenance classes: physical, s
 | `parkingDingRatePerDay` | 0.0002 | per day | engineering estimate |
 | `washProtectionPerWashPerMonth` | 0.05 | fraction | engineering estimate |
 | `rustThreshold` | 0.55 | index | engineering estimate |
+| `rustGrowthPerWetSaltDay` | 0.002 | index per day | engineering estimate |
+| `paintRepairThreshold` | 0.85 | index | engineering estimate |
+| `paintRepairResetIndex` | 0.20 | index | engineering estimate |
 | `windshieldChipRatePerHighwayKilometre` | 0.0004 | per kilometre | engineering estimate |
 | `windshieldCrackProbabilityPerChipPerColdDay` | 0.02 | per event | engineering estimate |
+| `windshieldCrackTemperatureThreshold` | -5 | degrees Celsius | engineering estimate |
+| `windshieldSpeedReference` | 90 | kilometres per hour | engineering estimate |
+| `windshieldGravelFactorPerShare` | 2.0 | dimensionless | engineering estimate |
 
 ### B.7 Fuel and reliability
 
@@ -1452,14 +1484,22 @@ All values are defaults and all are overridable. Provenance classes: physical, s
 | `frictionMeanEffectivePressure` | 1.2 | bar | engineering estimate |
 | `accessoryPower` | 0.6 | kilowatts | specification |
 | `airConditioningPower` | 0.7 | kilowatts | specification |
+| `airConditioningTemperatureThreshold` | 22 | degrees Celsius | engineering estimate |
 | `gasolineEnergyDensity` | 32 | MJ per litre | physical |
 | `coldStartExtraFuel` | 0.22 | litres | engineering estimate |
 | `coldStartFuelTemperatureSensitivity` | 0.05 | per degree Celsius | engineering estimate |
 | `airDensity` | 1.2 | kilograms per cubic metre | physical |
 | `gravity` | 9.81 | metres per second squared | physical |
+| `idleEngineSpeed` | 800 | revolutions per minute | specification |
 | `engineSpeedPerKilometrePerHour` | 18 | revolutions per minute per km/h | engineering estimate |
+| `baseRollingResistance` | 0.010 | dimensionless | engineering estimate |
 | `wetRollingResistanceIncrease` | 0.15 | dimensionless | engineering estimate |
 | `pressureRollingResistanceSensitivity` | 0.30 | dimensionless | engineering estimate |
+| `speedStyleSensitivity` | 0.30 | dimensionless | engineering estimate |
+| `stopStyleSensitivity` | 0.20 | dimensionless | engineering estimate |
+| `lateralStyleSensitivity` | 0.50 | dimensionless | engineering estimate |
+| `brakeOnsetStyleSensitivity` | 0.30 | dimensionless | engineering estimate |
+| `accelerationStyleSensitivity` | 0.40 | dimensionless | engineering estimate |
 | `engineAnnualFailureRate` | 0.008 | per year | literature prior |
 | `engineWearHazardMultiplier` | 15 | dimensionless | engineering estimate |
 | `wearHazardExponent` | 3 | dimensionless | engineering estimate |
