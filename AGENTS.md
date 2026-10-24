@@ -2,41 +2,77 @@
 
 ## Current state
 
-- Implemented: static `carwear_lib`, the `carwear` CLI (`run`, `monte-carlo`, `config`, `zones`), the model and Monte Carlo harness, TOML/CSV output, and a GoogleTest suite wired through CTest.
-- **Toolchain installed and verified end-to-end (2026-10-21):** GCC 16.2.0, CMake 4.4.4, Ninja 1.13.2, Conan 2.33.0 — a C++20 CMake+Ninja smoke build compiled and ran.
-- Model: `docs/whitepaper.md` is the specification and the guardrail. Implementation architecture, module boundaries, and workflow: `docs/architecture.md`.
-- Example cases: `cases/temperate-commuter.toml`, `cases/continental-short-trips.toml`, `cases/nordic-winter.toml`.
-- Additional UCRT64 packages: `pacman -S mingw-w64-ucrt-x86_64-<name>`.
-- Configure/build/test: `cmake --preset conan-release`, `cmake --build build/Release --parallel`, `ctest --test-dir build/Release --output-on-failure`.
+- Workflow-first monorepo. The simulation engine is one step in a Python DAG.
+- `engine/` holds the C++20 engine (CMake + Conan + CTest, 83 tests).
+- `packages/` holds six independent Python packages in a uv workspace.
+- `packages/carwear_workflow` builds the Hamilton DAG and exposes `carwear-workflow`.
+- `packages/carwear_dashboard` is a Streamlit + Plotly app over run artifacts.
+- Example study: `studies/cold-commuter-unmaintained.toml`.
 
-## Toolchain: MSYS2 UCRT64
+## Repo map
 
-- Canonical entry point (use verbatim): cmd — `set MSYSTEM=UCRT64` then `C:\msys64\usr\bin\bash.exe --login -i`; PowerShell — `$env:MSYSTEM='UCRT64'; C:\msys64\usr\bin\bash.exe --login -i`.
-- Non-interactive (agent/script) form: `$env:MSYSTEM='UCRT64'; C:\msys64\usr\bin\bash.exe -l -c '<cmd>'`. The login shell prepends `/ucrt64/bin` to `PATH` (verified).
-- **The toolchain exists only inside that shell.** From plain PowerShell/cmd, `gcc`, `cmake`, `ninja`, and `conan` are not found — always go through the UCRT64 login shell.
-- **C++20 only** (`cxx_std_20`). GCC 16 also accepts newer standards; don't drift to C++23.
-- Target is **Windows only**: Windows APIs and `std::filesystem` are fine, no POSIX portability shims needed.
-- CMake 4.x rejects projects declaring `cmake_minimum_required` below 3.5 — declare 3.28 or newer.
+```text
+engine/                       C++ simulation engine
+packages/carwear_core/        shared models, artifact layout, hashing
+packages/carwear_study/       study schema, expansion, case generation
+packages/carwear_engine/      subprocess adapter for carwear.exe
+packages/carwear_analysis/    collect, summary, sensitivity
+packages/carwear_workflow/    Hamilton DAG + CLI
+packages/carwear_dashboard/   Streamlit app
+studies/                      study definitions
+artifacts/                    run outputs (git-ignored)
+docs/                         architecture, workflow, simulation spec
+```
 
-## Dependencies
+## Toolchains
 
-- **Conan 2** (not Conan 1; the CLI is incompatible). The default profile is already detected (gcc 16, `gnu20`, Release) in `C:/Users/marce/.conan2` — don't re-run `conan profile detect`; add a Debug profile if needed.
-- Install with `conan install . --build=missing`. Prefer the `CMakeToolchain` + `CMakePresets` generators so `cmake --preset conan-release` / `conan-debug` work.
-- Keep third-party dependencies minimal: standard library or small header-only libraries first; confirm with the maintainer before adding large dependencies.
+- **C++** lives only inside the MSYS2 UCRT64 login shell:
+  `$env:MSYSTEM='UCRT64'; C:\msys64\usr\bin\bash.exe -l -c '<cmd>'`.
+  GCC 16.2, CMake 4.4, Ninja 1.13, Conan 2.33.
+- **Python** is managed by `uv` only. Never install packages globally and never
+  commit `.venv`. Use `uv sync` and `uv run ...`; the environment lives in
+  `.venv/`.
+- Windows only. `std::filesystem` and Windows APIs are fine.
 
-## Build goals
+## Commands
 
-- Priorities that override defaults: a **performant release executable** and **fast incremental rebuilds** (modular targets, ccache/PCH once the build exists). Keep all output under `build/` — it is already git-ignored.
+```powershell
+# engine
+$env:MSYSTEM='UCRT64'
+C:\msys64\usr\bin\bash.exe -l -c 'cd engine && cmake --build build/Release --parallel && ctest --test-dir build/Release --output-on-failure'
 
-## Testing
+# python
+uv sync
+uv run pytest
+uv run ruff check packages
+uv run mypy
 
-- Google Test, run through CMake/CTest. Single case: `ctest --test-dir build/Release -R <Suite.Case> -V`, or `--gtest_filter=<Suite.Case>` on `build/Release/tests/carwear_tests.exe`.
+# workflow
+uv run carwear-workflow plan studies/cold-commuter-unmaintained.toml
+uv run carwear-workflow run studies/cold-commuter-unmaintained.toml
+uv run carwear-workflow dashboard artifacts/<study>/<run>
+```
+
+## Boundaries
+
+- Packages are independent. Dependency direction is
+  `core ← study/engine/analysis ← workflow`; the dashboard reads artifacts only.
+- `carwear_engine` treats the C++ engine as a black box CLI. Do not add model
+  logic to Python; change the engine and its spec together.
+- The dashboard never runs simulations.
+- Keep agent context small: read only the `AGENTS.md` of the package you touch.
+
+## Artifacts
+
+- Every run writes `artifacts/<study>/<timestamp>/` with `manifest.json`,
+  `results.parquet`, `analysis/`, and one directory per design point.
+- Never commit `artifacts/`, `build/`, or `.venv/`.
 
 ## Git
 
-- Feature branch and GitHub PR; never push directly to `main`. No CI exists yet — build and run tests locally before opening a PR.
+- Feature branch and GitHub PR; never push directly to `main`.
+- Build and run the relevant tests locally before opening a PR.
 
-## Gotchas
+## Encoding
 
-- `README.md` is UTF-8 without BOM with LF endings. Keep it that way.
-- Write new source and CMake files as UTF-8 without BOM, LF endings.
+- Write source, TOML, and Markdown as UTF-8 without BOM with LF endings.

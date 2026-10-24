@@ -1,2 +1,7 @@
 # Normalize line endings: LF in the repo and working tree.
 * text=auto eol=lf
+
+*.py text eol=lf
+*.toml text eol=lf
+*.md text eol=lf
+*.parquet binary

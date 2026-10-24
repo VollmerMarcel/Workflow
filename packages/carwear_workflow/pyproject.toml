@@ -1,0 +1,28 @@
+[project]
+name = "carwear-workflow"
+version = "0.1.0"
+description = "Hamilton DAG and CLI for carwear design studies"
+requires-python = ">=3.12"
+dependencies = [
+    "carwear-analysis",
+    "carwear-core",
+    "carwear-engine",
+    "carwear-study",
+    "sf-hamilton>=1.70",
+]
+
+[tool.uv.sources]
+carwear-analysis = { workspace = true }
+carwear-core = { workspace = true }
+carwear-engine = { workspace = true }
+carwear-study = { workspace = true }
+
+[project.scripts]
+carwear-workflow = "carwear_workflow.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/carwear_workflow"]
