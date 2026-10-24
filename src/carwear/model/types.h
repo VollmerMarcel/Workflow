@@ -255,6 +255,7 @@ struct RunResult {
     int horizon_days = 365;
     std::uint64_t run_seed = 0;
     double frailty = 1.0;
+    bool include_paint_repair_in_total_cost_of_ownership = true;
     CurrentStateConfig initial_state;
 
     RunTotals totals;

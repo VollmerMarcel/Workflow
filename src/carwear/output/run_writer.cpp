@@ -95,6 +95,9 @@ toml::table run_to_toml(const RunResult& result) {
     run.insert_or_assign("run_seed",
                          static_cast<std::int64_t>(result.run_seed));
     run.insert_or_assign("frailty", result.frailty);
+    run.insert_or_assign(
+        "paint_repair_included_in_total_cost_of_ownership",
+        result.include_paint_repair_in_total_cost_of_ownership);
 
     const RunTotals& totals = result.totals;
     toml::table totals_table;

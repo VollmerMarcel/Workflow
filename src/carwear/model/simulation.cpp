@@ -56,6 +56,8 @@ RunResult run_model(const Config& config, const ResolvedInputs& inputs,
     result.start_date = config.case_config.start_date;
     result.horizon_days = std::max(1, config.case_config.horizon_days);
     result.run_seed = run_seed;
+    result.include_paint_repair_in_total_cost_of_ownership =
+        config.economics.include_paint_repair_in_total_cost_of_ownership;
     result.frailty = inputs.frailty;
     result.initial_state = inputs.initial_state;
 

@@ -129,6 +129,8 @@ MonteCarloResult run_monte_carlo(const Config& config, int number_of_runs,
         decompose_variance(groups, group_size, sample_epistemic_uncertainty);
     result.aggregate = aggregate_records(config, result.records, variance);
     result.aggregate.master_seed = master_seed;
+    result.aggregate.sample_epistemic_uncertainty = sample_epistemic_uncertainty;
+    result.aggregate.runs_per_sample = runs_per_sample;
     return result;
 }
 
