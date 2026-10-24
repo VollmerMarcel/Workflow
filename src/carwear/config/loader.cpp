@@ -1130,9 +1130,12 @@ bool validate_config(const Config& config, Diagnostics& diagnostics) {
         config.model.tire_tread_wear_limit_millimetres) {
         error("vehicle.tire_new_tread_millimetres must exceed the tire tread wear limit");
     }
+    // The installed trigger is the wear limit plus the adherence-scaled margin,
+    // so validate the effective margin rather than the raw configured one.
+    const double adherence = std::clamp(config.user.maintenance_adherence, 0.0, 1.0);
     const auto margin_is_reachable = [&](double wear_limit, double margin,
                                          double new_value, std::string_view key) {
-        if (wear_limit + margin >= new_value) {
+        if (wear_limit + adherence * margin >= new_value) {
             error(std::format(
                 "{} must place the replacement trigger below the new-part value", key));
         }

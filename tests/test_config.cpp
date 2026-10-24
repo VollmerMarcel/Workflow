@@ -167,6 +167,18 @@ front_pad_replacement_margin_millimetres = 20.0
     EXPECT_FALSE(loaded.ok());
 }
 
+TEST(ConfigTest, ReplacementMarginIsScaledByAdherence) {
+    // 22 mm limit + 0.5 * 3 mm stays below the 25 mm new disc.
+    const ConfigLoadResult loaded = test::load_case(R"toml(
+[user]
+maintenance_adherence = 0.5
+
+[maintenance]
+front_disc_replacement_margin_millimetres = 3.0
+)toml");
+    EXPECT_TRUE(loaded.ok());
+}
+
 TEST(ConfigTest, PaintResetMustBeBelowThreshold) {
     const ConfigLoadResult loaded = test::load_case(R"toml(
 [model]
