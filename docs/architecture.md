@@ -234,7 +234,7 @@ A Monte Carlo command writes:
 
 | File | Contents |
 |---|---|
-| `aggregate.toml` | distributions, budget exceedance, monthly means, part prognoses, failure summary, sensitivity, variance decomposition |
+| `aggregate.toml` | effective sampling settings, distributions, budget exceedance, monthly means, part prognoses, failure summary, sensitivity, variance decomposition |
 | `runs.csv` | one row per run, only when `output.write_runs_csv` is true |
 
 All numbers are written with the classic locale, so decimal separators do not

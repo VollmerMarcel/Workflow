@@ -118,6 +118,8 @@ struct VarianceDecomposition {
 struct Aggregate {
     int number_of_runs = 0;
     std::uint64_t master_seed = 0;
+    bool sample_epistemic_uncertainty = false;
+    int runs_per_sample = 1;
 
     DistributionStats distance_kilometres;
     DistributionStats fuel_litres;

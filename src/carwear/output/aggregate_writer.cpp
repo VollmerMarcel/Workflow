@@ -62,6 +62,9 @@ toml::table aggregate_to_toml(const Aggregate& aggregate) {
     table.insert_or_assign("number_of_runs", aggregate.number_of_runs);
     table.insert_or_assign("master_seed",
                            static_cast<std::int64_t>(aggregate.master_seed));
+    table.insert_or_assign("sample_epistemic_uncertainty",
+                           aggregate.sample_epistemic_uncertainty);
+    table.insert_or_assign("runs_per_sample", aggregate.runs_per_sample);
 
     add_distribution(table, "distance_kilometres",
                      aggregate.distance_kilometres, false);

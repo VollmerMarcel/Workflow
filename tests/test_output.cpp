@@ -9,6 +9,7 @@
 
 #include <toml++/toml.hpp>
 
+#include "carwear/harness/monte_carlo.h"
 #include "carwear/harness/statistics.h"
 #include "carwear/model/simulation.h"
 #include "carwear/model/state.h"
@@ -79,6 +80,13 @@ TEST(OutputTest, RunTomlIsValidAndContainsContractFields) {
     EXPECT_EQ(run->get("case_name")->value<std::string>(), "unit-test");
     EXPECT_EQ(run->get("horizon_days")->value<std::int64_t>(), 30);
     EXPECT_EQ(run->get("run_seed")->value<std::int64_t>(), 42);
+    const auto paint_included =
+        run->get("paint_repair_included_in_total_cost_of_ownership")
+            ->value<bool>();
+    ASSERT_TRUE(paint_included.has_value());
+    EXPECT_EQ(*paint_included,
+              config.economics
+                  .include_paint_repair_in_total_cost_of_ownership);
 
     const toml::table* totals = run->get("totals")->as_table();
     ASSERT_NE(totals, nullptr);
@@ -130,10 +138,28 @@ TEST(OutputTest, AggregateTomlIsValidAndContainsPrognoses) {
     const toml::table* table = parsed["aggregate"].as_table();
     ASSERT_NE(table, nullptr);
     EXPECT_EQ(table->get("number_of_runs")->value<std::int64_t>(), 1);
+    EXPECT_EQ(table->get("runs_per_sample")->value<std::int64_t>(), 1);
     EXPECT_TRUE(table->contains("total_cost_of_ownership_euros"));
     EXPECT_TRUE(table->contains("part_prognoses"));
     EXPECT_TRUE(table->contains("failures"));
     EXPECT_TRUE(table->contains("variance_decomposition"));
+}
+
+TEST(OutputTest, AggregateTomlRecordsEffectiveSamplingSettings) {
+    Config config = short_config();
+    config.monte_carlo.sample_epistemic_uncertainty = true;
+    const MonteCarloResult result = run_monte_carlo(config, 2, 99, false, 2);
+
+    const std::string text = aggregate_to_toml_string(result.aggregate);
+    toml::table parsed = toml::parse(text);
+    const toml::table* table = parsed["aggregate"].as_table();
+    ASSERT_NE(table, nullptr);
+
+    const auto epistemic =
+        table->get("sample_epistemic_uncertainty")->value<bool>();
+    ASSERT_TRUE(epistemic.has_value());
+    EXPECT_FALSE(*epistemic);
+    EXPECT_EQ(table->get("runs_per_sample")->value<std::int64_t>(), 2);
 }
 
 TEST(OutputTest, AggregateWriterCreatesFiles) {
