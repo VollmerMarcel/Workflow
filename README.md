@@ -167,7 +167,8 @@ root `output/` directory is git-ignored.
 ## Testing
 
 `monte-carlo` also has the alias `mc`, and `--output` can be shortened to `-o`.
-The default Monte Carlo run count is 20,000; the CLI caps it at 1,000,000.
+The default Monte Carlo run count is 20,000, and a case-file value must not
+exceed 1,000,000.
 
 Run the whole suite with CTest:
 
