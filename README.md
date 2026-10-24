@@ -73,12 +73,13 @@ Options:
 
 | Option | Meaning |
 |---|---|
-| `--output DIR` | Output directory; defaults to `output/` from the case file |
+| `--output DIR` | Output directory; defaults to `output/` relative to the working directory, while the bundled cases set `output/<case-name>` |
 | `--seed N` | Override the run seed |
 | `--trips` | Also write the optional per-trip CSV |
 
-A single run writes `run.toml`, `run_events.csv`, and `run_monthly.csv`, plus
-`run_trips.csv` with `--trips`.
+A single run writes `run.toml`. When `output.write_run_tables` is true (the
+default) it also writes `run_events.csv` and `run_monthly.csv`; with `--trips`
+it additionally writes `run_trips.csv`.
 
 ### Monte Carlo
 
@@ -114,8 +115,9 @@ validation. It is the quickest way to see what the model will actually use.
 
 ## Case files
 
-A case is a TOML document. Every value has a default, so a case only needs to
-state what differs from the default car and driver:
+A case is a TOML document. Every value except the case start date has a
+default, so a case only needs `[case].start_date` plus whatever differs from
+the default car and driver:
 
 ```toml
 [case]
@@ -153,8 +155,8 @@ Runnable examples are in [`cases/`](cases):
 | File | Contents |
 |---|---|
 | `run.toml` | Case metadata, seed, frailty, totals, cost breakdown, final state, events, and monthly snapshots |
-| `run_events.csv` | One row per event: day, kind, item, cost |
-| `run_monthly.csv` | One row per month with cost, fuel, failures, and state snapshots |
+| `run_events.csv` | One row per event: day, kind, item, cost_euros, when `output.write_run_tables` is true |
+| `run_monthly.csv` | One row per month with cost, fuel, failures, and state snapshots, when `output.write_run_tables` is true |
 | `run_trips.csv` | One row per trip, only with `--trips` or `output.write_trips = true` |
 | `aggregate.toml` | Monte Carlo distributions and diagnostics |
 | `runs.csv` | One row per Monte Carlo run, when enabled |
@@ -163,6 +165,9 @@ All output is written under the configured output directory. The repository
 root `output/` directory is git-ignored.
 
 ## Testing
+
+`monte-carlo` also has the alias `mc`, and `--output` can be shortened to `-o`.
+The default Monte Carlo run count is 20,000; the CLI caps it at 1,000,000.
 
 Run the whole suite with CTest:
 
