@@ -1,0 +1,26 @@
+schema_version = "1.0"
+
+# The Nordic commuter car driven to work every day with no maintenance
+# adherence. Commute distance and vehicle mass are the design axes.
+[study]
+name = "cold-commuter-unmaintained"
+base_case = "engine/cases/nordic-winter.toml"
+seed = 20261024
+runs = 200
+epistemic = true
+runs_per_sample = 1
+jobs = 4
+
+[study.output]
+write_run_tables = false
+write_runs_csv = false
+
+[fixed]
+"user.maintenance_adherence" = 0.0
+"user.commute_days_per_week" = 5
+
+[variant."user.commute_distance_kilometres"]
+values = [20.0, 40.0, 60.0]
+
+[variant."vehicle.mass_kilograms"]
+values = [1450.0, 1580.0, 1700.0]

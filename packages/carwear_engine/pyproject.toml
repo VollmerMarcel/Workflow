@@ -1,0 +1,16 @@
+[project]
+name = "carwear-engine"
+version = "0.1.0"
+description = "Subprocess adapter for the compiled carwear engine"
+requires-python = ">=3.12"
+dependencies = ["carwear-core"]
+
+[tool.uv.sources]
+carwear-core = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/carwear_engine"]

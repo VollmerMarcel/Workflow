@@ -1,0 +1,60 @@
+[project]
+name = "carwear-workspace"
+version = "0.1.0"
+description = "Workflow-first car wear prognosis monorepo"
+requires-python = ">=3.12"
+# The root project exists to give the workspace one development environment.
+# It depends on every member so `uv sync` installs all of them editable.
+dependencies = [
+    "carwear-analysis",
+    "carwear-core",
+    "carwear-dashboard",
+    "carwear-engine",
+    "carwear-study",
+    "carwear-workflow",
+]
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+carwear-analysis = { workspace = true }
+carwear-core = { workspace = true }
+carwear-dashboard = { workspace = true }
+carwear-engine = { workspace = true }
+carwear-study = { workspace = true }
+carwear-workflow = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "mypy>=1.14",
+    "pandas-stubs>=2.2",
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "ruff>=0.9",
+    "tomli-w>=1.2",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["packages/*/src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["packages"]
+addopts = "-q"
+markers = ["integration: requires the compiled carwear engine"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["packages", "conftest.py"]
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = ["hamilton.*", "plotly.*", "scipy.*"]
+ignore_missing_imports = true
