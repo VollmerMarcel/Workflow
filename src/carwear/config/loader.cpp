@@ -957,8 +957,16 @@ void load_current_state(const toml::table& root, Config& config, Diagnostics& di
     reader.get_array4("winter_tire_tread_millimetres",
                       state.winter_tire_tread_millimetres);
     reader.get("winter_tire_age_years", state.winter_tire_age_years);
+    const bool battery_health_specified = reader.has("battery_state_of_health");
     reader.get("battery_state_of_health", state.battery_state_of_health);
     reader.get("battery_age_years", state.battery_age_years);
+    if (!battery_health_specified) {
+        // Keep an overridden age and the default health prior consistent.
+        state.battery_state_of_health =
+            clamp(1.0 - model.battery_age_factor *
+                            std::sqrt(std::max(0.0, state.battery_age_years)),
+                  0.0, 1.0);
+    }
     reader.get("suspension_wear_index", state.suspension_wear_index);
     reader.get("clutch_wear_index", state.clutch_wear_index);
     reader.get("exhaust_corrosion_index", state.exhaust_corrosion_index);
@@ -1062,6 +1070,9 @@ bool validate_config(const Config& config, Diagnostics& diagnostics) {
         }
     };
 
+    if (config.output.directory.empty()) {
+        error("output.directory must not be empty");
+    }
     if (!config.case_config.start_date_specified) {
         error("case.start_date is required");
     }
@@ -1119,6 +1130,40 @@ bool validate_config(const Config& config, Diagnostics& diagnostics) {
         config.model.tire_tread_wear_limit_millimetres) {
         error("vehicle.tire_new_tread_millimetres must exceed the tire tread wear limit");
     }
+    // The installed trigger is the wear limit plus the adherence-scaled margin,
+    // so validate the effective margin rather than the raw configured one.
+    const double adherence = std::clamp(config.user.maintenance_adherence, 0.0, 1.0);
+    const auto margin_is_reachable = [&](double wear_limit, double margin,
+                                         double new_value, std::string_view key) {
+        if (wear_limit + adherence * margin >= new_value) {
+            error(std::format(
+                "{} must place the replacement trigger below the new-part value", key));
+        }
+    };
+    margin_is_reachable(
+        maintenance.front_pad_wear_limit_millimetres,
+        maintenance.front_pad_replacement_margin_millimetres,
+        vehicle.front_pad_new_millimetres,
+        "maintenance.front_pad_replacement_margin_millimetres");
+    margin_is_reachable(
+        maintenance.rear_pad_wear_limit_millimetres,
+        maintenance.rear_pad_replacement_margin_millimetres,
+        vehicle.rear_pad_new_millimetres,
+        "maintenance.rear_pad_replacement_margin_millimetres");
+    margin_is_reachable(
+        maintenance.front_disc_wear_limit_millimetres,
+        maintenance.front_disc_replacement_margin_millimetres,
+        vehicle.front_disc_new_millimetres,
+        "maintenance.front_disc_replacement_margin_millimetres");
+    margin_is_reachable(
+        maintenance.rear_disc_wear_limit_millimetres,
+        maintenance.rear_disc_replacement_margin_millimetres,
+        vehicle.rear_disc_new_millimetres,
+        "maintenance.rear_disc_replacement_margin_millimetres");
+    margin_is_reachable(config.model.tire_tread_wear_limit_millimetres,
+                        maintenance.tire_replacement_margin_millimetres,
+                        vehicle.tire_new_tread_millimetres,
+                        "maintenance.tire_replacement_margin_millimetres");
 
     const auto& state = config.current_state;
     non_negative(state.engine_wear_equivalent_kilometres,
@@ -1167,6 +1212,10 @@ bool validate_config(const Config& config, Diagnostics& diagnostics) {
     if (state.windshield_chip_count < 0) {
         error("current_state.windshield_chip_count must be non-negative");
     }
+    non_negative(state.tire_age_years, "current_state.tire_age_years");
+    non_negative(state.winter_tire_age_years,
+                 "current_state.winter_tire_age_years");
+    non_negative(state.battery_age_years, "current_state.battery_age_years");
     non_negative(state.coolant_age_months, "current_state.coolant_age_months");
     non_negative(state.oil_change_age_months, "current_state.oil_change_age_months");
     non_negative(state.inspection_age_months, "current_state.inspection_age_months");
@@ -1217,6 +1266,12 @@ bool validate_config(const Config& config, Diagnostics& diagnostics) {
                  "current_state.uncertainty.winter_tire_age_years");
     non_negative(uncertainty.battery_state_of_health,
                  "current_state.uncertainty.battery_state_of_health");
+    non_negative(uncertainty.battery_age_years,
+                 "current_state.uncertainty.battery_age_years");
+    if (uncertainty.windshield_chip_count < 0.0) {
+        error("current_state.uncertainty.windshield_chip_count must be "
+              "non-negative");
+    }
     non_negative(uncertainty.suspension_wear_index,
                  "current_state.uncertainty.suspension_wear_index");
     non_negative(uncertainty.clutch_wear_index,
@@ -1346,6 +1401,10 @@ bool validate_config(const Config& config, Diagnostics& diagnostics) {
     probability(model.rust_threshold, "model.rust_threshold");
     probability(model.paint_repair_threshold, "model.paint_repair_threshold");
     probability(model.paint_repair_reset_index, "model.paint_repair_reset_index");
+    if (model.paint_repair_reset_index >= model.paint_repair_threshold) {
+        error("model.paint_repair_reset_index must be below "
+              "model.paint_repair_threshold");
+    }
     positive(model.reference_mass_kilograms, "model.reference_mass_kilograms");
     positive(model.reference_pressure_bar, "model.reference_pressure_bar");
     positive(model.tire_tread_wear_limit_millimetres,

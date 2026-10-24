@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <string>
 
 #include "carwear/config/loader.h"
@@ -148,6 +149,55 @@ TEST(ConfigTest, ReplacementIndicesAreValidated) {
 suspension_replacement_wear_index = 1.5
 )toml");
     EXPECT_FALSE(loaded.ok());
+}
+
+TEST(ConfigTest, EmptyOutputDirectoryIsAnError) {
+    const ConfigLoadResult loaded = test::load_case(R"toml(
+[output]
+directory = ""
+)toml");
+    EXPECT_FALSE(loaded.ok());
+}
+
+TEST(ConfigTest, UnreachableReplacementMarginIsAnError) {
+    const ConfigLoadResult loaded = test::load_case(R"toml(
+[maintenance]
+front_pad_replacement_margin_millimetres = 20.0
+)toml");
+    EXPECT_FALSE(loaded.ok());
+}
+
+TEST(ConfigTest, ReplacementMarginIsScaledByAdherence) {
+    // 22 mm limit + 0.5 * 3 mm stays below the 25 mm new disc.
+    const ConfigLoadResult loaded = test::load_case(R"toml(
+[user]
+maintenance_adherence = 0.5
+
+[maintenance]
+front_disc_replacement_margin_millimetres = 3.0
+)toml");
+    EXPECT_TRUE(loaded.ok());
+}
+
+TEST(ConfigTest, PaintResetMustBeBelowThreshold) {
+    const ConfigLoadResult loaded = test::load_case(R"toml(
+[model]
+paint_repair_threshold = 0.20
+paint_repair_reset_index = 0.30
+)toml");
+    EXPECT_FALSE(loaded.ok());
+}
+
+TEST(ConfigTest, BatteryHealthFollowsOverriddenAge) {
+    const ConfigLoadResult loaded = test::load_case(R"toml(
+[current_state]
+battery_age_years = 8.0
+)toml");
+    ASSERT_TRUE(loaded.ok());
+    const double expected =
+        1.0 - loaded.config->model.battery_age_factor * std::sqrt(8.0);
+    EXPECT_NEAR(loaded.config->current_state.battery_state_of_health, expected,
+                1e-9);
 }
 
 TEST(ConfigTest, InfiniteModelValueIsAnError) {

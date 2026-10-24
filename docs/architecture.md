@@ -71,8 +71,9 @@ harness
 
 ### `config`
 
-`config.h` is the single typed schema. Every value has a default, so a case
-file only states what differs from the default case. The loader:
+`config.h` is the single typed schema. Every value except
+`case.start_date` has a default, so a case file only states the start date
+plus whatever differs from the default case. The loader:
 
 1. parses TOML with toml++;
 2. applies defaults and climate-zone presets;
@@ -123,8 +124,8 @@ seed and passes them into `resolve_inputs` and `run_model`.
 
 ### `output`
 
-- `run_writer` — `run.toml`, `run_events.csv`, `run_monthly.csv`, and optional
-  `run_trips.csv`.
+- `run_writer` - `run.toml`, `run_events.csv` and `run_monthly.csv` when
+  `output.write_run_tables` is true, and optional `run_trips.csv`.
 - `aggregate_writer` — `aggregate.toml` and optional `runs.csv`.
 - `csv` — locale-independent numeric formatting.
 
@@ -225,8 +226,8 @@ A single run writes:
 | File | Contents |
 |---|---|
 | `run.toml` | case metadata, seed, frailty, totals, cost breakdown, final state, events, and monthly snapshots |
-| `run_events.csv` | one row per event: day, kind, item, cost |
-| `run_monthly.csv` | one row per calendar month with cost, fuel, failures, and state snapshots |
+| `run_events.csv` | one row per event: day, kind, item, cost_euros (only when `output.write_run_tables` is true) |
+| `run_monthly.csv` | one row per calendar month with cost, fuel, failures, and state snapshots (only when `output.write_run_tables` is true) |
 | `run_trips.csv` | one row per trip, only with `--trips` or `output.write_trips = true` |
 
 A Monte Carlo command writes:
@@ -282,7 +283,7 @@ profile supplies GCC with `gnu20` and Release.
 A single test case:
 
 ```bash
-ctest --test-dir build/Release -R SimulationTest.DeterministicForSameSeed -V
+ctest --test-dir build/Release -R SimulationTest.SameSeedProducesIdenticalRun -V
 ```
 
 or directly:

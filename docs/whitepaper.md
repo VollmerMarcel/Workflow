@@ -558,7 +558,7 @@ thermalLoad = loadFactor * (1 + turboHeatSensitivity * meanSpeed / 100)
 turboWearIncrement = turboWearPerCycle * thermalLoad^2
 ```
 
-A hot shutdown after a high-load trip adds a fixed coking increment. The resulting turbo wear index feeds the turbocharger hazard and the engine wear multiplier.
+A hot shutdown after a high-load trip adds a fixed coking increment. The resulting turbo wear index feeds the turbocharger failure mode.
 
 #### 9.1.6 Engine failure modes
 
@@ -639,14 +639,14 @@ temperatureFactor = 1 + tireTemperatureWearSensitivity
                     * max(0, ambientTemperature - 20) / 20
 
 surfaceFactor = 1 + wetSurfaceWearIncrease * indicator(wet)
-                + gravelSurfaceWearIncrease * indicator(gravel)
+                + gravelSurfaceWearIncrease * gravelRoadShare
 
 treadLoss = distance * tireWearPerKilometre * cornerShare
             * cornerLoadFactor * pressureFactor * lateralFactor
             * temperatureFactor * surfaceFactor * tireCompoundFactor
 ```
 
-Nominal tread wear is 1.4 times ten to the minus four millimetres per kilometre, which corresponds to about 6.4 millimetres over 45,000 kilometres.
+Nominal tread wear is 1.4 times ten to the minus four millimetres per kilometre, which corresponds to about 6.4 millimetres over 45,000 kilometres. `gravelRoadShare` is a continuous proxy for the fraction of driving on gravel; no per-trip gravel flag is required.
 
 Corner shares depend on drivetrain. Front-wheel drive biases wear to the front axle; rear-wheel drive biases it to the rear; all-wheel drive distributes it more evenly. The four shares sum to one.
 
@@ -758,19 +758,19 @@ Paint is intentionally simple. It is a condition index, not a detailed surface m
 
 ```
 paintDamageIncrement =
-      days * uvDamagePerIndexDay * uvIndex / paintDurability
+      days * uvDamagePerIndexDay * uvIndex * (1 - 0.5 * washProtection)
     + days * saltDamagePerDay * saltExposure * (1 - washProtection)
     + distance * gritDamagePerKilometre * trafficDensity
 ```
 
 Additional events:
 
-- **Stone chips**: Poisson events with a rate proportional to highway distance and speed. Each chip adds a small damage increment.
+- **Stone chips**: Poisson events with a rate proportional to highway distance and speed. Each chip adds a small damage increment, reduced by half the wash protection.
 - **Hail**: a hail day adds a large damage increment.
 - **Parking dings**: Poisson events whose rate depends on parking situation: street, carport, or garage.
 - **Rust**: when damage exceeds a threshold, wet and salty days grow a separate rust index. The output is the probability that rust has started by the horizon.
 
-Washing and waxing reduce salt and ultraviolet damage for a period. The user's washing frequency is part of the case.
+Washing and waxing reduce salt, ultraviolet, and stone-chip damage for a period. Salt damage uses the full wash protection; UV and chip damage use half of it. The user's washing frequency is part of the case.
 
 Paint repair is a small, optional cost. It does not feed back into vehicle value.
 
@@ -929,6 +929,9 @@ Each failure contributes:
 - downtime days valued at the configured daily rate,
 - a reduction in the relevant wear index after repair.
 
+A windshield crack is repaired without towing or downtime. It still counts as a
+failure in the failure tally, but its consequence cost is zero.
+
 There is no accident model and therefore no injury, liability, or body-damage cascade.
 
 ---
@@ -1063,9 +1066,10 @@ A single run has no percentiles, no means, and no probabilities. Those are prope
 
 ### 14.2 Model output: run tables
 
-A run also produces CSV tables for detailed analysis:
+A run also produces CSV tables for detailed analysis when
+`output.write_run_tables` is true (the default):
 
-- `run_events.csv`, one row per event: day, kind, item, cost.
+- `run_events.csv`, one row per event: day, kind, item, cost_euros.
 - `run_monthly.csv`, one row per month: cost and the principal wear states.
 - `run_trips.csv`, optional, one row per trip, when trip-level analysis is requested.
 
@@ -1269,7 +1273,7 @@ Validation for a single case cannot rely on a ground-truth outcome. It relies on
 
 ### 17.1 Structural tests
 
-- **Accounting identity**: the sum of cost components equals total cost of ownership.
+- **Accounting identity**: the sum of cost components equals total cost of ownership. When paint repair is excluded from total cost of ownership (the default), `paint_repair_euros` is reported separately and is not part of the sum.
 - **Conservation**: cumulative distance equals the sum of trip distances.
 - **State bounds**: every health index stays within its admissible range.
 - **Reset consistency**: a replacement resets the installed state and leaves cumulative life unchanged.

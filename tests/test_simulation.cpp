@@ -7,6 +7,7 @@
 #include "carwear/config/config.h"
 #include "carwear/model/simulation.h"
 #include "carwear/model/state.h"
+#include "carwear/model/weather.h"
 #include "test_support.h"
 
 namespace carwear {
@@ -185,6 +186,36 @@ zone = "nordic"
     const RunResult result = run(*loaded.config, 3);
     EXPECT_GT(result.totals.distance_kilometres, 0.0);
     EXPECT_EQ(result.monthly.size(), 12u);
+}
+
+TEST(SimulationTest, AlwaysWetClimateNeverProducesDryDays) {
+    const ConfigLoadResult loaded = test::load_case(R"toml(
+[climate]
+precipitation_persistence = 0.5
+monthly_precipitation_probability = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+)toml");
+    ASSERT_TRUE(loaded.ok());
+    Rng rng(1234);
+    WeatherProcess weather(*loaded.config, loaded.config->case_config.start_date,
+                           rng);
+    for (int day = 0; day < 60; ++day) {
+        EXPECT_TRUE(weather.next_day().precipitation);
+    }
+}
+
+TEST(SimulationTest, AlwaysDryClimateNeverProducesWetDays) {
+    const ConfigLoadResult loaded = test::load_case(R"toml(
+[climate]
+precipitation_persistence = 0.5
+monthly_precipitation_probability = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+)toml");
+    ASSERT_TRUE(loaded.ok());
+    Rng rng(1234);
+    WeatherProcess weather(*loaded.config, loaded.config->case_config.start_date,
+                           rng);
+    for (int day = 0; day < 60; ++day) {
+        EXPECT_FALSE(weather.next_day().precipitation);
+    }
 }
 
 TEST(SimulationTest, CatalystDoesNotSaturateInOneYear) {
