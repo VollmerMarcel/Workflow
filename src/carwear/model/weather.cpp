@@ -38,16 +38,17 @@ Weather WeatherProcess::next_day() {
 
     const double p = clamp(climate.monthly_precipitation_probability[index], 0.0, 1.0);
     const double q = clamp(climate.precipitation_persistence, 0.0, 1.0);
-    double dry_to_wet = q;
-    if (p > 0.0 && p < 1.0) {
-        dry_to_wet = clamp(p * (1.0 - q) / (1.0 - p), 0.0, 1.0);
+    if (p >= 1.0) {
+        // An always-wet month has no dry state, regardless of persistence.
+        weather.precipitation = true;
     } else if (p <= 0.0) {
-        dry_to_wet = 0.0;
+        weather.precipitation = false;
     } else {
-        dry_to_wet = 1.0;
+        const double dry_to_wet = clamp(p * (1.0 - q) / (1.0 - p), 0.0, 1.0);
+        weather.precipitation = previous_precipitation_
+                                    ? rng_.bernoulli(q)
+                                    : rng_.bernoulli(dry_to_wet);
     }
-    weather.precipitation = previous_precipitation_ ? rng_.bernoulli(q)
-                                                    : rng_.bernoulli(dry_to_wet);
     weather.road_wet = weather.precipitation || previous_precipitation_;
     weather.snowy = weather.precipitation &&
                     weather.temperature_celsius <

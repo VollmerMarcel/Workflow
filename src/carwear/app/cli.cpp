@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -23,6 +24,7 @@ namespace carwear {
 namespace {
 
 constexpr std::string_view kVersion = "0.1.0";
+constexpr int kMaxRuns = 1000000;
 
 void print_usage(std::ostream& out) {
     out << "Car Wear Prognosis Engine " << kVersion << "\n\n"
@@ -31,7 +33,7 @@ void print_usage(std::ostream& out) {
         << "      Run the model once and write run.toml plus run tables.\n\n"
         << "  carwear monte-carlo <case.toml> [--output DIR] [--runs N] [--seed N]\n"
         << "                              [--runs-per-sample N] [--nominal]\n"
-        << "      Run the harness and write aggregate.toml plus runs.csv.\n\n"
+        << "      Run the harness and write aggregate.toml; runs.csv when enabled.\n\n"
         << "  carwear config <case.toml>\n"
         << "      Load a case and print the fully resolved configuration.\n\n"
         << "  carwear zones\n"
@@ -55,7 +57,9 @@ std::optional<std::uint64_t> parse_u64(std::string_view text) {
     const auto result =
         std::from_chars(text.data(), text.data() + text.size(), value);
     if (result.ec != std::errc{} ||
-        result.ptr != text.data() + text.size()) {
+        result.ptr != text.data() + text.size() ||
+        value > static_cast<std::uint64_t>(
+                    std::numeric_limits<std::int64_t>::max())) {
         return std::nullopt;
     }
     return value;
@@ -258,6 +262,14 @@ int run_monte_carlo_command(const Options& options) {
         options.seed.value_or(config.monte_carlo.master_seed);
     const int runs_per_sample =
         options.runs_per_sample.value_or(config.monte_carlo.runs_per_sample);
+    if (runs > kMaxRuns) {
+        std::cerr << "error: --runs must not exceed " << kMaxRuns << '\n';
+        return 2;
+    }
+    if (runs_per_sample > runs) {
+        std::cerr << "error: --runs-per-sample must not exceed --runs\n";
+        return 2;
+    }
     const bool sample_epistemic =
         options.nominal ? false : config.monte_carlo.sample_epistemic_uncertainty;
 
@@ -295,9 +307,19 @@ int run_monte_carlo_command(const Options& options) {
     return 0;
 }
 
+bool has_run_options(const Options& options) {
+    return options.output.has_value() || options.seed.has_value() ||
+           options.runs.has_value() || options.runs_per_sample.has_value() ||
+           options.trips || options.nominal;
+}
+
 int print_config(const Options& options) {
     if (options.config_path.empty()) {
         std::cerr << "error: config requires a case file\n";
+        return 2;
+    }
+    if (has_run_options(options)) {
+        std::cerr << "error: config accepts only a case file\n";
         return 2;
     }
     auto loaded = load_or_report(options.config_path);
@@ -308,7 +330,11 @@ int print_config(const Options& options) {
     return 0;
 }
 
-int list_zones() {
+int list_zones(const Options& options) {
+    if (!options.config_path.empty() || has_run_options(options)) {
+        std::cerr << "error: zones accepts no arguments or options\n";
+        return 2;
+    }
     for (const std::string& zone : known_climate_zones()) {
         std::cout << zone << '\n';
     }
@@ -343,7 +369,7 @@ int run_cli(int argc, char** argv) {
         return print_config(*options);
     }
     if (options->command == "zones") {
-        return list_zones();
+        return list_zones(*options);
     }
     std::cerr << "error: unknown command " << options->command << '\n';
     print_usage(std::cerr);
