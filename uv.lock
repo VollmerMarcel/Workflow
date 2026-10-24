@@ -3,10 +3,10 @@ revision = 5
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.15' and sys_platform == 'win32'",
-    "python_full_version == '3.14.*' and sys_platform == 'win32'",
     "python_full_version >= '3.15' and sys_platform == 'emscripten'",
-    "python_full_version == '3.14.*' and sys_platform == 'emscripten'",
     "python_full_version >= '3.15' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.14.*' and sys_platform == 'win32'",
+    "python_full_version == '3.14.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.14.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
     "python_full_version < '3.14' and sys_platform == 'win32'",
     "python_full_version < '3.14' and sys_platform == 'emscripten'",
@@ -235,6 +235,7 @@ source = { editable = "packages/carwear_workflow" }
 dependencies = [
     { name = "carwear-analysis" },
     { name = "carwear-core" },
+    { name = "carwear-dashboard" },
     { name = "carwear-engine" },
     { name = "carwear-study" },
     { name = "sf-hamilton" },
@@ -244,6 +245,7 @@ dependencies = [
 requires-dist = [
     { name = "carwear-analysis", editable = "packages/carwear_analysis" },
     { name = "carwear-core", editable = "packages/carwear_core" },
+    { name = "carwear-dashboard", editable = "packages/carwear_dashboard" },
     { name = "carwear-engine", editable = "packages/carwear_engine" },
     { name = "carwear-study", editable = "packages/carwear_study" },
     { name = "sf-hamilton", specifier = ">=1.70" },
@@ -269,6 +271,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
+    { name = "tomli-w" },
 ]
 
 [package.metadata]
@@ -288,6 +291,7 @@ dev = [
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-cov", specifier = ">=6.0" },
     { name = "ruff", specifier = ">=0.9" },
+    { name = "tomli-w", specifier = ">=1.2" },
 ]
 
 [[package]]

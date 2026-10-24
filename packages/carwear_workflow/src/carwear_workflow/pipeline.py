@@ -52,8 +52,8 @@ def run_study(
 
     resolved_study = Path(study_path).resolve()
     study = load_study(resolved_study)
-    layout = ArtifactLayout.create(run_root, study.name, run_id)
     engine = Path(engine_path) if engine_path is not None else find_engine()
+    layout = ArtifactLayout.create(run_root, study.name, run_id)
 
     outputs = build_driver().execute(
         [

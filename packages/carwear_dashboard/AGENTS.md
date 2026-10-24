@@ -6,7 +6,7 @@ Read-only Streamlit + Plotly UI over one finished run directory.
 
 ## Contents
 
-- `app.py` — loads `results.parquet`, `summary.parquet`, and
+- `app.py` — loads `results.parquet`, `analysis/summary.parquet`, and
   `analysis/sensitivity.parquet`; tabs for overview, distributions, compare,
   drivers, and raw data.
 

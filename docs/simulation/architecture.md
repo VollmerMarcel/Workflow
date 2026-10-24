@@ -9,19 +9,19 @@ split, the file layout, and the build and test workflow.
 ## Repository layout
 
 ```
-CMakeLists.txt              library, CLI, and test wiring
-conanfile.py                tomlplusplus and GoogleTest dependencies
-cases/                      runnable example cases
-docs/whitepaper.md          model specification (the guardrail)
-docs/architecture.md        this document
-src/main.cpp                CLI entry point
-src/carwear/core/           dates, math helpers, diagnostics, RNG
-src/carwear/config/         typed configuration, loader, serialization
-src/carwear/model/          weather, trips, physics, maintenance, failures
-src/carwear/harness/        Monte Carlo loop and aggregate statistics
-src/carwear/output/         run and aggregate writers
-src/carwear/app/            command-line front end
-tests/                      GoogleTest suites
+engine/CMakeLists.txt       library, CLI, and test wiring
+engine/conanfile.py         tomlplusplus and GoogleTest dependencies
+engine/cases/               runnable example cases
+engine/src/main.cpp         CLI entry point
+engine/src/carwear/core/    dates, math helpers, diagnostics, RNG
+engine/src/carwear/config/  typed configuration, loader, serialization
+engine/src/carwear/model/   weather, trips, physics, maintenance, failures
+engine/src/carwear/harness/ Monte Carlo loop and aggregate statistics
+engine/src/carwear/output/  run and aggregate writers
+engine/src/carwear/app/     command-line front end
+engine/tests/               GoogleTest suites
+docs/simulation/whitepaper.md    model specification (the guardrail)
+docs/simulation/architecture.md  this document
 ```
 
 The build has three targets:
@@ -263,11 +263,12 @@ one. The harness uses the same function with sampling enabled or disabled by
 
 ## Build and test
 
-The toolchain lives in the MSYS2 UCRT64 login shell, so all commands run there:
+The toolchain lives in the MSYS2 UCRT64 login shell. All commands below run from
+the repository root:
 
 ```bash
 $env:MSYSTEM='UCRT64'; C:\msys64\usr\bin\bash.exe -l -c '
-  cd /e/ProgrammierProjecte/Workflow
+  cd engine
   conan install . --build=missing -s build_type=Release \
     -c tools.cmake.cmaketoolchain:generator=Ninja
   cmake --preset conan-release
@@ -283,30 +284,30 @@ profile supplies GCC with `gnu20` and Release.
 A single test case:
 
 ```bash
-ctest --test-dir build/Release -R SimulationTest.SameSeedProducesIdenticalRun -V
+ctest --test-dir engine/build/Release -R SimulationTest.SameSeedProducesIdenticalRun -V
 ```
 
 or directly:
 
 ```bash
-build/Release/tests/carwear_tests.exe --gtest_filter=SimulationTest.*
+engine/build/Release/tests/carwear_tests.exe --gtest_filter=SimulationTest.*
 ```
 
 ## Adding a feature
 
-1. Change the model in `docs/whitepaper.md` first if the model changes.
+1. Change the model in `docs/simulation/whitepaper.md` first if the model changes.
 2. Add any new parameter to `Config` with a default and to the loader; document
    only genuinely new model constants in Appendix B of the whitepaper.
 3. Keep new stochastic draws on the stream that matches their subsystem.
 4. Keep the model free of aggregation and the harness free of day simulation.
 5. Add a unit test for the equation or invariant, and a determinism test when
    the random sequence changes.
-6. Update `docs/architecture.md` only when module boundaries, streams, file
+6. Update `docs/simulation/architecture.md` only when module boundaries, streams, file
    layout, or workflow change — not for model tuning.
 
 ## Example cases
 
-The `cases/` directory contains three runnable configurations:
+The `engine/cases/` directory contains three runnable configurations:
 
 | Case | Climate | Use pattern |
 |---|---|---|
@@ -317,8 +318,8 @@ The `cases/` directory contains three runnable configurations:
 Run them with:
 
 ```bash
-./build/Release/carwear.exe run cases/temperate-commuter.toml
-./build/Release/carwear.exe monte-carlo cases/nordic-winter.toml --runs 2000
+./engine/build/Release/carwear.exe run engine/cases/temperate-commuter.toml
+./engine/build/Release/carwear.exe monte-carlo engine/cases/nordic-winter.toml --runs 2000
 ```
 
 Their default output directories are under `output/`, which is git-ignored.

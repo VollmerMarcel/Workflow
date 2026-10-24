@@ -8,13 +8,13 @@ import sys
 from pathlib import Path
 
 from carwear_study.expand import expand_study
-from carwear_study.loader import load_study
-from carwear_study.loader import repo_root as _repo_root
+from carwear_study.loader import load_study, resolve_base_case
 from carwear_workflow.pipeline import run_study
 
 
 def _plan(study_path: Path) -> int:
     study = load_study(study_path)
+    resolve_base_case(study, study_path)
     points = expand_study(study)
     print(f"study: {study.name}")
     print(f"base_case: {study.base_case}")
@@ -34,6 +34,9 @@ def _run(args: argparse.Namespace) -> int:
         run_id=args.run_id,
     )
     print(f"run: {output.layout.run_dir}")
+    if output.results.empty or "status" not in output.results:
+        print("no design points were simulated", file=sys.stderr)
+        return 2
     print(output.summary.to_string(index=False))
     failed = output.results.loc[output.results["status"] == "failed", "point_id"].tolist()
     if failed:
@@ -43,7 +46,10 @@ def _run(args: argparse.Namespace) -> int:
 
 
 def _dashboard(args: argparse.Namespace) -> int:
-    app = _repo_root() / "packages" / "carwear_dashboard" / "src" / "carwear_dashboard" / "app.py"
+    import carwear_dashboard
+
+    package = Path(carwear_dashboard.__file__ or "").parent
+    app = package / "app.py"
     if not app.is_file():
         print(f"dashboard app not found at {app}", file=sys.stderr)
         return 2
@@ -81,7 +87,12 @@ def main(argv: list[str] | None = None) -> int:
     dashboard_parser.set_defaults(func=_dashboard)
 
     args = parser.parse_args(argv)
-    return int(args.func(args))
+    try:
+        return int(args.func(args))
+    except (FileNotFoundError, ValueError) as exc:
+        # Includes pydantic.ValidationError and tomllib.TOMLDecodeError.
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

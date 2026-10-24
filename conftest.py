@@ -56,6 +56,8 @@ def main(argv):
 
     output = Path(options.get("output", "output"))
     if command == "config":
+        if case.get("test", {}).get("warn", False):
+            print("warning: unknown key 'test.warn' ignored", file=sys.stderr)
         print(f"case: {name}")
         return 0
 

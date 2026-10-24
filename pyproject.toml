@@ -32,6 +32,7 @@ dev = [
     "pytest>=8.3",
     "pytest-cov>=6.0",
     "ruff>=0.9",
+    "tomli-w>=1.2",
 ]
 
 [tool.ruff]
@@ -49,7 +50,7 @@ markers = ["integration: requires the compiled carwear engine"]
 
 [tool.mypy]
 python_version = "3.12"
-files = ["packages"]
+files = ["packages", "conftest.py"]
 warn_unused_ignores = true
 warn_redundant_casts = true
 no_implicit_optional = true

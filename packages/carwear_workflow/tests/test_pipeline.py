@@ -178,3 +178,20 @@ def test_cli_plan_lists_points(tmp_path: Path, capsys: pytest.CaptureFixture) ->
     assert "points: 3" in captured.out
     assert "p0000" in captured.out
     assert "user.commute_distance_kilometres=10.0" in captured.out
+
+
+def test_cli_reports_a_missing_study(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    code = main(["plan", str(tmp_path / "nope.toml")])
+
+    assert code == 2
+    assert "error:" in capsys.readouterr().err
+
+
+def test_cli_reports_an_unknown_table(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    study = tmp_path / "study.toml"
+    study.write_text(STUDY + '\n[variants."user.x"]\nvalues = [1.0]\n', encoding="utf-8")
+
+    code = main(["plan", str(study)])
+
+    assert code == 2
+    assert "unknown top-level table" in capsys.readouterr().err

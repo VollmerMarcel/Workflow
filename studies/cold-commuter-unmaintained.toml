@@ -1,6 +1,6 @@
 schema_version = "1.0"
 
-# A new car driven to work every day in a Nordic climate, with no maintenance
+# The Nordic commuter car driven to work every day with no maintenance
 # adherence. Commute distance and vehicle mass are the design axes.
 [study]
 name = "cold-commuter-unmaintained"
@@ -18,9 +18,6 @@ write_runs_csv = false
 [fixed]
 "user.maintenance_adherence" = 0.0
 "user.commute_days_per_week" = 5
-"vehicle.vehicle_age_years" = 0.0
-"vehicle.odometer_kilometres" = 0.0
-"current_state.battery_age_years" = 0.0
 
 [variant."user.commute_distance_kilometres"]
 values = [20.0, 40.0, 60.0]

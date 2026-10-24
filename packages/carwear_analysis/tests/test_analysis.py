@@ -130,3 +130,56 @@ def test_sensitivity_needs_enough_points() -> None:
 
 def test_sensitivity_empty_input() -> None:
     assert sensitivity_table(pd.DataFrame()).empty
+
+
+def test_flatten_aggregate_reports_budget_and_variance() -> None:
+    aggregate = _aggregate(1000.0)
+    aggregate["aggregate"]["budget"] = {"defined": True, "probability_exceeding": 0.25}
+    aggregate["aggregate"]["variance_decomposition"] = {
+        "available": True,
+        "aleatory_fraction": 0.6,
+        "epistemic_fraction": 0.4,
+        "runs_per_sample": 2,
+        "samples": 5,
+    }
+
+    row = flatten_aggregate(aggregate)
+
+    assert row["probability_exceeding_budget"] == 0.25
+    assert row["aleatory_fraction"] == 0.6
+    assert row["epistemic_fraction"] == 0.4
+
+
+def test_flatten_aggregate_skips_undefined_budget() -> None:
+    aggregate = _aggregate(1000.0)
+    aggregate["aggregate"]["budget"] = {"defined": False, "probability_exceeding": 0.0}
+    assert "probability_exceeding_budget" not in flatten_aggregate(aggregate)
+
+
+def test_failed_point_has_no_failure_totals() -> None:
+    frame = collect_results(STUDY, [PointResult(point_id="p0000", status="failed", error="boom")])
+    assert "expected_failures_total" not in frame.columns
+    assert "failure_probability_any" not in frame.columns
+
+
+def test_mixed_variant_types_survive_parquet(tmp_path) -> None:
+    results = [
+        PointResult(
+            point_id="p0000",
+            overrides={"climate.zone": "nordic"},
+            aggregate=_aggregate(1.0),
+        ),
+        PointResult(point_id="p0001", overrides={"climate.zone": 3}, aggregate=_aggregate(2.0)),
+    ]
+    frame = collect_results(STUDY, results)
+    frame.to_parquet(tmp_path / "results.parquet", index=False)
+    assert frame["in.climate.zone"].tolist() == ["nordic", "3"]
+
+
+def test_points_sort_numerically() -> None:
+    results = [
+        PointResult(point_id=f"p{index}", overrides={"v": index}, aggregate=_aggregate(1.0))
+        for index in (10000, 9999)
+    ]
+    frame = collect_results(STUDY, results)
+    assert list(frame["point_id"]) == ["p9999", "p10000"]

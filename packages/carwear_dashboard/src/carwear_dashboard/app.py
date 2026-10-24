@@ -33,7 +33,7 @@ st.set_page_config(page_title="Car Wear Study", layout="wide")
 
 run_dir = _args().run_dir
 results = _load(run_dir, "results.parquet")
-summary = _load(run_dir, "summary.parquet")
+summary = _load(run_dir, "analysis/summary.parquet")
 sensitivity = _load(run_dir, "analysis/sensitivity.parquet")
 
 st.title("Car Wear Study")
@@ -50,6 +50,11 @@ metrics = [
     for column in columns
     if column.endswith("_mean") or column.endswith("_p95") or column.startswith("failure_")
 ]
+
+if not metrics:
+    st.error("No successful design points. Check the `status` and `error` columns.")
+    st.dataframe(results, width="stretch", hide_index=True)
+    st.stop()
 
 with st.sidebar:
     st.header("Filters")
@@ -74,13 +79,16 @@ with overview:
             "Mean failure probability",
             f"{view['failure_probability_any'].mean():.1%}",
         )
-    st.dataframe(summary, use_container_width=True, hide_index=True)
+    if summary.empty:
+        st.info("No summary table for this run.")
+    else:
+        st.dataframe(summary, width="stretch", hide_index=True)
 
 with distributions:
     if metric in view:
         st.plotly_chart(
             px.box(view, x="point_id", y=metric, points="all", title=metric),
-            use_container_width=True,
+            width="stretch",
         )
     if inputs and "total_cost_of_ownership_euros_mean" in view:
         x_axis = st.selectbox("Variant input", [item.removeprefix("in.") for item in inputs])
@@ -93,7 +101,7 @@ with distributions:
                 hover_data=["point_id"],
                 title=f"TCO vs {x_axis}",
             ),
-            use_container_width=True,
+            width="stretch",
         )
 
 with compare:
@@ -106,7 +114,7 @@ with compare:
         columns = ["point_id", *metrics]
         st.dataframe(
             view[view["point_id"].isin(chosen)][columns],
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
     else:
@@ -128,11 +136,11 @@ with drivers:
                     orientation="h",
                     title=f"Spearman correlation with {metric}",
                 ),
-                use_container_width=True,
+                width="stretch",
             )
 
 with data:
-    st.dataframe(results, use_container_width=True, hide_index=True)
+    st.dataframe(results, width="stretch", hide_index=True)
     st.download_button(
         "Download results CSV",
         results.to_csv(index=False).encode("utf-8"),

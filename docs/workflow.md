@@ -66,8 +66,10 @@ carwear-workflow run <study.toml> [--run-root artifacts] [--run-id ID]
 carwear-workflow dashboard <run-dir>
 ```
 
-`run` prints the summary table and exits non-zero if any point failed. Failed
-points stay in `results.parquet` with `status = "failed"` and an error message.
+`run` prints the summary table and exits `1` if any point failed. Failed points
+stay in `results.parquet` with `status = "failed"` and an error message. Bad
+input (missing study, invalid TOML, unknown tables, missing engine) exits `2`
+with an `error:` line instead of a traceback.
 
 ## Artifacts
 
@@ -90,11 +92,26 @@ artifacts/<study>/<run-id>/
 - `<aggregate>_mean`, `<aggregate>_p50`, `<aggregate>_p95` for each engine
   distribution
 - `failure_probability_any`, `expected_failures_total`
+- `probability_exceeding_budget` when the engine has a defined budget
+- `aleatory_fraction`, `epistemic_fraction` when variance decomposition is
+  available
 - `tco_per_kilometre_euros` — the engine's total cost of ownership divided by
   mean distance. Fuel cost is reported separately by the engine, so this is not
   a full cost of ownership per kilometre.
 
+Failed points keep their `status` and `error`, and leave the aggregate columns
+empty rather than zero.
+
+## Validation
+
+Before simulating a point, the workflow runs `carwear config` on the generated
+case. Any engine error or warning (for example an unknown key from a typo in
+`[fixed]` or `[variant.*]`) fails that point with the engine's message instead
+of silently running with defaults.
+
 ## Caching
 
-A point is skipped when its `aggregate.toml` already exists in the run
-directory, unless `--force` is passed. Use `--run-id` to resume a specific run.
+A point is skipped when its `aggregate.toml` exists **and** the case hash
+recorded in `meta.json` still matches the generated `case.toml`. Changing the
+study, its overrides, or its run settings therefore reruns the affected points;
+`--force` reruns everything. Use `--run-id` to resume a specific run.

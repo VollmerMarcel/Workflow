@@ -7,9 +7,19 @@ The model specification is `../docs/simulation/whitepaper.md`.
 
 ## Build
 
+From the repository root:
+
 ```powershell
 $env:MSYSTEM='UCRT64'
 C:\msys64\usr\bin\bash.exe -l -c 'cd engine && conan install . --build=missing -s build_type=Release -c tools.cmake.cmaketoolchain:generator=Ninja && cmake --preset conan-release && cmake --build build/Release --parallel'
+```
+
+Or from inside this directory:
+
+```bash
+conan install . --build=missing -s build_type=Release -c tools.cmake.cmaketoolchain:generator=Ninja
+cmake --preset conan-release
+cmake --build build/Release --parallel
 ```
 
 ## Commands

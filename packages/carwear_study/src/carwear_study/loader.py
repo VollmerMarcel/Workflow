@@ -31,12 +31,23 @@ def load_study(path: Path | str) -> Study:
     study_path = Path(path)
     data = tomllib.loads(study_path.read_text(encoding="utf-8"))
 
+    unknown = sorted(set(data) - {"schema_version", "study", "fixed", "variant"})
+    if unknown:
+        raise ValueError(
+            f"{study_path}: unknown top-level table(s) {', '.join(unknown)}; "
+            "expected study, fixed, and variant"
+        )
+
     table = data.get("study")
     if not isinstance(table, dict):
         raise ValueError(f"{study_path}: missing [study] table")
 
+    version = data.get("schema_version", "1.0")
+    if version != "1.0":
+        raise ValueError(f"{study_path}: unsupported schema_version {version!r} (expected '1.0')")
+
     payload: dict[str, Any] = dict(table)
-    payload["schema_version"] = data.get("schema_version", "1.0")
+    payload["schema_version"] = version
     payload["fixed"] = data.get("fixed", {})
     payload["variants"] = data.get("variant", {})
     return Study.model_validate(payload)

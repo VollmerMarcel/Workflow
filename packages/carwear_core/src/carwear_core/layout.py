@@ -8,9 +8,22 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 
+def _segment(text: str) -> str:
+    """Sanitize one path segment, rejecting traversal attempts."""
+
+    cleaned = re.sub(r"[^a-zA-Z0-9._-]+", "-", text).strip("-. ")
+    if not cleaned or set(cleaned) <= {"."}:
+        raise ValueError(f"invalid path segment: {text!r}")
+    return cleaned
+
+
 def _slug(text: str) -> str:
-    cleaned = re.sub(r"[^a-zA-Z0-9._-]+", "-", text).strip("-").lower()
-    return cleaned or "study"
+    """Lowercase directory name for a study, falling back to ``study``."""
+
+    try:
+        return _segment(text.lower())
+    except ValueError:
+        return "study"
 
 
 @dataclass(frozen=True)
@@ -28,9 +41,9 @@ class ArtifactLayout:
     ) -> ArtifactLayout:
         root_path = Path(root)
         if run_id is None:
-            stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-            run_id = f"{stamp}-{datetime.now(UTC).microsecond:06d}"
-        layout = cls(root_path / _slug(study_name) / run_id)
+            now = datetime.now(UTC)
+            run_id = f"{now.strftime('%Y%m%dT%H%M%SZ')}-{now.microsecond:06d}"
+        layout = cls(root_path / _slug(study_name) / _segment(run_id))
         layout.ensure()
         return layout
 

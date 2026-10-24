@@ -39,21 +39,20 @@ def _repo_root(start: Path | None = None) -> Path:
 def find_engine(repo_root: Path | None = None) -> Path:
     """Find the engine binary, honouring ``CARWEAR_BIN`` first."""
 
-    candidates: list[Path] = []
     configured = os.environ.get("CARWEAR_BIN")
     if configured:
-        candidates.append(Path(configured))
+        binary = Path(configured)
+        if not binary.is_file():
+            raise FileNotFoundError(f"CARWEAR_BIN={configured!r} is not a file")
+        return binary
+
     root = repo_root or _repo_root()
-    candidates.extend(
-        [
-            root / "engine" / "build" / "Release" / "carwear.exe",
-            root / "build" / "Release" / "carwear.exe",
-        ]
+    candidate = root / "engine" / "build" / "Release" / "carwear.exe"
+    if candidate.is_file():
+        return candidate
+    raise FileNotFoundError(
+        f"carwear.exe not found at {candidate}; build the engine or set CARWEAR_BIN"
     )
-    for candidate in candidates:
-        if candidate.is_file():
-            return candidate
-    raise FileNotFoundError("carwear.exe not found; build the engine or set CARWEAR_BIN")
 
 
 def engine_env() -> dict[str, str]:
@@ -71,6 +70,8 @@ def _invoke(command: list[str], timeout: float) -> EngineRun:
         command,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         env=engine_env(),
         timeout=timeout,
         check=False,

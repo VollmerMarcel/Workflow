@@ -46,7 +46,7 @@ def _run_dir(tmp_path: Path) -> Path:
     run = tmp_path / "run"
     (run / "analysis").mkdir(parents=True)
     _results().to_parquet(run / "results.parquet", index=False)
-    _results().to_parquet(run / "summary.parquet", index=False)
+    _results().head(2).to_parquet(run / "analysis" / "summary.parquet", index=False)
     _sensitivity().to_parquet(run / "analysis" / "sensitivity.parquet", index=False)
     return run
 
@@ -62,6 +62,8 @@ def test_app_renders_a_finished_run(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert not at.exception
     assert at.title[0].value == "Car Wear Study"
     assert len(at.tabs) == 5
+    # The summary table lives in analysis/; a wrong path silently hides it.
+    assert any(len(frame.value) == 2 for frame in at.dataframe)
 
 
 def test_app_reports_missing_results(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -80,3 +82,21 @@ def test_app_survives_missing_sensitivity(tmp_path: Path, monkeypatch: pytest.Mo
     at = _app(run, monkeypatch)
 
     assert not at.exception
+
+
+def test_app_explains_an_all_failed_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    run = tmp_path / "failed"
+    run.mkdir()
+    failed = pd.DataFrame(
+        {
+            "point_id": ["p0000"],
+            "status": ["failed"],
+            "error": ["engine exited 2"],
+        }
+    )
+    failed.to_parquet(run / "results.parquet", index=False)
+
+    at = _app(run, monkeypatch)
+
+    assert not at.exception
+    assert any("No successful design points" in error.value for error in at.error)

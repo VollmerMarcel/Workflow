@@ -23,7 +23,7 @@ code-first; swapping the executor later only touches `carwear_workflow`.
 | Package | Depends on | Responsibility |
 |---|---|---|
 | `carwear_core` | pydantic | Models, artifact layout, hashing |
-| `carwear_study` | core, numpy | Study parsing, design expansion, case writing |
+| `carwear_study` | core, numpy, tomli-w | Study parsing, design expansion, case writing |
 | `carwear_engine` | core | Locate and run `carwear.exe`, parse aggregates |
 | `carwear_analysis` | core, pandas, pyarrow, scipy | Tidy tables, summary, Spearman drivers |
 | `carwear_workflow` | all steps, hamilton | DAG, CLI, manifest, persisted artifacts |
@@ -54,8 +54,9 @@ On Windows the engine needs the MinGW runtime; the adapter prepends
 - `expand_study` produces deterministic `DesignPoint`s: fixed overrides plus the
   cartesian product of variant axes, with seeds derived from the study seed.
 - Each point gets a generated `case.toml` under the run directory.
-- `point_results` runs the engine for every point with a thread pool. Completed
-  points are reused unless `--force`.
+- `point_results` runs the engine for every point with a thread pool. Each case
+  is validated with `carwear config` first, and completed points are reused when
+  the recorded case hash still matches, unless `--force`.
 - `collect_results` flattens `[aggregate]` distributions and failure summaries
   into one row per point, keeping inputs as `in.<dotted.key>` columns.
 - `summary_table` ranks by total cost of ownership; `sensitivity_table` computes
@@ -88,5 +89,5 @@ default per point to keep artifacts small; enable them in `[study.output]`.
 
 - Unit tests per package.
 - A fake engine script exercises the workflow without C++.
-- One integration test uses the real engine with a short horizon.
-- The C++ engine keeps its own CTest suite.
+- The real engine is exercised manually with `carwear-workflow run` and by the
+  C++ CTest suite.

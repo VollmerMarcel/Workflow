@@ -25,19 +25,34 @@ def analysis_artifacts(
     summary_table.to_parquet(layout.summary_parquet, index=False)
     sensitivity_table.to_parquet(layout.sensitivity_parquet, index=False)
 
+    if "status" in results_table:
+        failed = results_table.loc[results_table["status"] == "failed"]
+    else:
+        failed = results_table.iloc[0:0]
     lines = [
         f"# {study.name}",
         "",
         f"- runs per point: {study.runs}",
         f"- epistemic sampling: {study.epistemic}",
         f"- design points: {len(results_table)}",
+        f"- failed points: {len(failed)}",
         "",
-        "## Summary",
-        "",
-        "```text",
-        summary_table.to_string(index=False),
-        "```",
     ]
+    if not failed.empty:
+        lines.extend(["## Failures", ""])
+        for _, row in failed.iterrows():
+            lines.append(f"- `{row['point_id']}`: {row.get('error') or 'unknown error'}")
+        lines.append("")
+
+    lines.extend(
+        [
+            "## Summary",
+            "",
+            "```text",
+            summary_table.to_string(index=False) if not summary_table.empty else "no rows",
+            "```",
+        ]
+    )
     if not sensitivity_table.empty:
         lines.extend(
             [
