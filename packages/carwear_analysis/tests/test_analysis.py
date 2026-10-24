@@ -100,6 +100,44 @@ def test_summary_table_passes_empty_frame() -> None:
     assert summary_table(pd.DataFrame()).empty
 
 
+def test_summary_table_skips_failed_points() -> None:
+    frame = pd.DataFrame(
+        {
+            "point_id": ["p0000", "p0001"],
+            "status": ["ok", "failed"],
+            "total_cost_of_ownership_euros_mean": [100.0, float("nan")],
+        }
+    )
+
+    summary = summary_table(frame)
+
+    assert list(summary["point_id"]) == ["p0000"]
+    assert list(summary["tco_rank"]) == [1.0]
+
+
+def test_collect_results_mixes_ok_and_failed() -> None:
+    results = [
+        PointResult(point_id="p0000", overrides={"v": 1.0}, aggregate=_aggregate(1000.0)),
+        PointResult(point_id="p0001", status="failed", error="boom", overrides={"v": 2.0}),
+    ]
+
+    frame = collect_results(STUDY, results)
+
+    assert frame["status"].tolist() == ["ok", "failed"]
+    assert frame.loc[0, "failure_probability_any"] == pytest.approx(0.28)
+    assert pd.isna(frame.loc[1, "failure_probability_any"])
+    assert pd.isna(frame.loc[1, "tco_per_kilometre_euros"])
+
+
+def test_skipped_point_keeps_failure_totals() -> None:
+    frame = collect_results(
+        STUDY, [PointResult(point_id="p0000", status="skipped", aggregate=_aggregate(1.0))]
+    )
+
+    assert frame.loc[0, "failure_probability_any"] == pytest.approx(0.28)
+    assert frame.loc[0, "expected_failures_total"] == pytest.approx(0.3)
+
+
 def test_sensitivity_finds_monotonic_driver() -> None:
     frame = pd.DataFrame(
         {

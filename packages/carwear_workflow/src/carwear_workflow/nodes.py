@@ -41,7 +41,9 @@ def analysis_artifacts(
     if not failed.empty:
         lines.extend(["## Failures", ""])
         for _, row in failed.iterrows():
-            lines.append(f"- `{row['point_id']}`: {row.get('error') or 'unknown error'}")
+            message = row.get("error")
+            text = "unknown error" if pd.isna(message) or message in (None, "") else str(message)
+            lines.append(f"- `{row['point_id']}`: {text}")
         lines.append("")
 
     lines.extend(

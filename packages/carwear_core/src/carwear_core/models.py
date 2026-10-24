@@ -56,7 +56,7 @@ class Study(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: str = "1.0"
+    schema_version: Literal["1.0"] = "1.0"
     name: str
     base_case: str
     seed: int = 0

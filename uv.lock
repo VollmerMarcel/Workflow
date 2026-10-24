@@ -197,7 +197,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.2" },
     { name = "plotly", specifier = ">=5.24" },
     { name = "pyarrow", specifier = ">=18.0" },
-    { name = "streamlit", specifier = ">=1.40" },
+    { name = "streamlit", specifier = ">=1.51" },
 ]
 
 [[package]]
@@ -235,21 +235,26 @@ source = { editable = "packages/carwear_workflow" }
 dependencies = [
     { name = "carwear-analysis" },
     { name = "carwear-core" },
-    { name = "carwear-dashboard" },
     { name = "carwear-engine" },
     { name = "carwear-study" },
     { name = "sf-hamilton" },
+]
+
+[package.optional-dependencies]
+dashboard = [
+    { name = "carwear-dashboard" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "carwear-analysis", editable = "packages/carwear_analysis" },
     { name = "carwear-core", editable = "packages/carwear_core" },
-    { name = "carwear-dashboard", editable = "packages/carwear_dashboard" },
+    { name = "carwear-dashboard", marker = "extra == 'dashboard'", editable = "packages/carwear_dashboard" },
     { name = "carwear-engine", editable = "packages/carwear_engine" },
     { name = "carwear-study", editable = "packages/carwear_study" },
     { name = "sf-hamilton", specifier = ">=1.70" },
 ]
+provides-extras = ["dashboard"]
 
 [[package]]
 name = "carwear-workspace"

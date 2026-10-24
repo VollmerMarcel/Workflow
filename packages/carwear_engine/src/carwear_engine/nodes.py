@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import tomllib
 from concurrent.futures import ThreadPoolExecutor
@@ -33,10 +34,11 @@ def _failed(
     )
 
 
-def _case_hash(path: Path) -> str:
-    """Hash the resolved case so a resume cannot mix stale aggregates in."""
+def _case_hash(path: Path, seed: int) -> str:
+    """Hash the resolved case and its seed so a resume cannot mix stale runs in."""
 
-    return stable_hash(tomllib.loads(path.read_text(encoding="utf-8")))
+    document = tomllib.loads(path.read_text(encoding="utf-8"))
+    return stable_hash({"case": document, "seed": seed})
 
 
 def _write_meta(output_dir: Path, payload: dict[str, object]) -> None:
@@ -49,10 +51,21 @@ def _validation_problem(study: Study, case: CaseFile, engine: Path) -> str | Non
     run = validate_case(
         engine, case.path, timeout=min(study.timeout_seconds, VALIDATION_TIMEOUT_SECONDS)
     )
-    diagnostics = run.stderr.strip()
+    diagnostics = run.stderr.strip()[-4000:]
     if run.returncode != 0 or "warning:" in diagnostics or "error:" in diagnostics:
         return diagnostics or f"engine config exited {run.returncode}"
     return None
+
+
+def _previous_succeeded(previous: dict[str, object], case_hash: str) -> bool:
+    """True only when the recorded metadata proves a successful run of this case."""
+
+    return (
+        previous.get("case_hash") == case_hash
+        and previous.get("returncode") == 0
+        and "validation" not in previous
+        and "error" not in previous
+    )
 
 
 def _run_one(
@@ -68,7 +81,7 @@ def _run_one(
     meta_path = output_dir / "meta.json"
 
     try:
-        case_hash = _case_hash(case.path)
+        case_hash = _case_hash(case.path, case.point.seed)
     except Exception as exc:  # noqa: BLE001 - one point must not abort the study
         return _failed(case, f"cannot read generated case: {exc}", output_dir=output_dir)
 
@@ -79,7 +92,7 @@ def _run_one(
                 previous = json.loads(meta_path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 previous = {}
-        if previous.get("case_hash") == case_hash:
+        if _previous_succeeded(previous, case_hash):
             try:
                 aggregate = load_aggregate(output_dir)
             except Exception as exc:  # noqa: BLE001
@@ -92,6 +105,11 @@ def _run_one(
                 aggregate=aggregate,
                 output_dir=output_dir,
             )
+
+    # From here the point will be re-run: never leave a previous aggregate behind
+    # that could be mistaken for the result of this case.
+    with contextlib.suppress(OSError):
+        aggregate_path.unlink(missing_ok=True)
 
     try:
         problem = _validation_problem(study, case, engine_path)
@@ -192,5 +210,18 @@ def point_results(
             try:
                 results.append(future.result())
             except Exception as exc:  # noqa: BLE001 - never lose the other points
-                results.append(_failed(case, f"unexpected error: {exc}"))
+                output_dir = layout.point_dir(case.point.id)
+                try:
+                    (output_dir / "aggregate.toml").unlink(missing_ok=True)
+                    _write_meta(
+                        output_dir,
+                        {
+                            "point_id": case.point.id,
+                            "seed": case.point.seed,
+                            "error": str(exc),
+                        },
+                    )
+                except OSError:
+                    pass
+                results.append(_failed(case, f"unexpected error: {exc}", output_dir=output_dir))
         return results

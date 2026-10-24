@@ -87,7 +87,7 @@ def collect_results(study: Study, point_results: list[PointResult]) -> pd.DataFr
         }
         row.update({f"in.{key}": value for key, value in result.overrides.items()})
         flat = flatten_aggregate(result.aggregate)
-        if result.status != "ok":
+        if result.status == "failed":
             # A failed point must not look like a genuine zero.
             flat.pop("failure_probability_any", None)
             flat.pop("expected_failures_total", None)

@@ -21,9 +21,11 @@ def _slug(text: str) -> str:
     """Lowercase directory name for a study, falling back to ``study``."""
 
     try:
-        return _segment(text.lower())
+        slug = _segment(text.lower())
     except ValueError:
         return "study"
+    # Keep the whole run path well inside the Windows path limit.
+    return slug[:64].rstrip("-. ") or "study"
 
 
 @dataclass(frozen=True)
@@ -80,4 +82,4 @@ class ArtifactLayout:
         return self.analysis_dir / "report.md"
 
     def point_dir(self, point_id: str) -> Path:
-        return self.points_dir / point_id
+        return self.points_dir / _segment(point_id)

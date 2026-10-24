@@ -71,6 +71,9 @@ stay in `results.parquet` with `status = "failed"` and an error message. Bad
 input (missing study, invalid TOML, unknown tables, missing engine) exits `2`
 with an `error:` line instead of a traceback.
 
+`dashboard` needs the optional extra. In this workspace `uv sync` already
+installs it; elsewhere use `pip install 'carwear-workflow[dashboard]'`.
+
 ## Artifacts
 
 ```text
@@ -111,7 +114,12 @@ of silently running with defaults.
 
 ## Caching
 
-A point is skipped when its `aggregate.toml` exists **and** the case hash
-recorded in `meta.json` still matches the generated `case.toml`. Changing the
-study, its overrides, or its run settings therefore reruns the affected points;
-`--force` reruns everything. Use `--run-id` to resume a specific run.
+A point is skipped when its `aggregate.toml` exists **and** `meta.json` records a
+successful run of the same case hash. The hash covers the generated `case.toml`
+and the point seed, so changing the study, its overrides, or its run settings
+reruns the affected points; `--force` reruns everything. A failed point deletes
+its aggregate so a resume cannot reuse stale numbers. Use `--run-id` to resume a
+specific run.
+
+The hash does not include the engine binary: rebuilding `carwear.exe` keeps
+existing aggregates. Pass `--force` after an engine change.

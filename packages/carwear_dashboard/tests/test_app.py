@@ -42,11 +42,22 @@ def _sensitivity() -> pd.DataFrame:
     )
 
 
+def _summary() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "point_id": ["p0000", "p0001"],
+            "total_cost_of_ownership_euros_mean": [1000.0, 1500.0],
+            "tco_per_kilometre_euros": [0.1, 0.15],
+            "tco_rank": [1.0, 2.0],
+        }
+    )
+
+
 def _run_dir(tmp_path: Path) -> Path:
     run = tmp_path / "run"
     (run / "analysis").mkdir(parents=True)
     _results().to_parquet(run / "results.parquet", index=False)
-    _results().head(2).to_parquet(run / "analysis" / "summary.parquet", index=False)
+    _summary().to_parquet(run / "analysis" / "summary.parquet", index=False)
     _sensitivity().to_parquet(run / "analysis" / "sensitivity.parquet", index=False)
     return run
 
@@ -63,7 +74,9 @@ def test_app_renders_a_finished_run(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert at.title[0].value == "Car Wear Study"
     assert len(at.tabs) == 5
     # The summary table lives in analysis/; a wrong path silently hides it.
-    assert any(len(frame.value) == 2 for frame in at.dataframe)
+    summary = [frame.value for frame in at.dataframe if "tco_rank" in frame.value]
+    assert len(summary) == 1
+    assert len(summary[0]) == 2
 
 
 def test_app_reports_missing_results(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

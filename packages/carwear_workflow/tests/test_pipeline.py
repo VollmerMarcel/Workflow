@@ -195,3 +195,14 @@ def test_cli_reports_an_unknown_table(tmp_path: Path, capsys: pytest.CaptureFixt
 
     assert code == 2
     assert "unknown top-level table" in capsys.readouterr().err
+
+
+def test_cli_dashboard_explains_the_missing_extra(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    monkeypatch.setattr("importlib.util.find_spec", lambda name: None)
+
+    code = main(["dashboard", "some-run"])
+
+    assert code == 2
+    assert "carwear-workflow[dashboard]" in capsys.readouterr().err

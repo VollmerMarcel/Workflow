@@ -38,6 +38,10 @@ uv sync
 uv run pytest
 ```
 
+`uv sync` installs every workspace member, including the dashboard. To install
+the workflow on its own, use the dashboard extra:
+`pip install 'carwear-workflow[dashboard]'`.
+
 Run a study and open the dashboard:
 
 ```bash

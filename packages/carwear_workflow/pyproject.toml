@@ -6,11 +6,13 @@ requires-python = ">=3.12"
 dependencies = [
     "carwear-analysis",
     "carwear-core",
-    "carwear-dashboard",
     "carwear-engine",
     "carwear-study",
     "sf-hamilton>=1.70",
 ]
+
+[project.optional-dependencies]
+dashboard = ["carwear-dashboard"]
 
 [tool.uv.sources]
 carwear-analysis = { workspace = true }

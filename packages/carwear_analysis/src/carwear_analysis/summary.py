@@ -21,8 +21,13 @@ def summary_table(results_table: pd.DataFrame) -> pd.DataFrame:
 
     if results_table.empty:
         return results_table
-    columns = ["point_id", *[m for m in SUMMARY_METRICS if m in results_table]]
-    summary = results_table.loc[:, columns].copy()
+    table = results_table
+    if "status" in table:
+        table = table.loc[table["status"] != "failed"]
+    if table.empty:
+        return table
+    columns = ["point_id", *[m for m in SUMMARY_METRICS if m in table]]
+    summary = table.loc[:, columns].copy()
     if "total_cost_of_ownership_euros_mean" in summary:
         summary["tco_rank"] = summary["total_cost_of_ownership_euros_mean"].rank(method="min")
         summary = summary.sort_values("total_cost_of_ownership_euros_mean")

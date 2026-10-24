@@ -37,7 +37,10 @@ def _run(args: argparse.Namespace) -> int:
     if output.results.empty or "status" not in output.results:
         print("no design points were simulated", file=sys.stderr)
         return 2
-    print(output.summary.to_string(index=False))
+    if output.summary.empty:
+        print("no successful design points", file=sys.stderr)
+    else:
+        print(output.summary.to_string(index=False))
     failed = output.results.loc[output.results["status"] == "failed", "point_id"].tolist()
     if failed:
         print(f"failed points: {', '.join(failed)}", file=sys.stderr)
@@ -46,6 +49,15 @@ def _run(args: argparse.Namespace) -> int:
 
 
 def _dashboard(args: argparse.Namespace) -> int:
+    from importlib.util import find_spec
+
+    if find_spec("carwear_dashboard") is None:
+        print(
+            "error: the dashboard is not installed; "
+            "install it with `pip install 'carwear-workflow[dashboard]'`",
+            file=sys.stderr,
+        )
+        return 2
     import carwear_dashboard
 
     package = Path(carwear_dashboard.__file__ or "").parent

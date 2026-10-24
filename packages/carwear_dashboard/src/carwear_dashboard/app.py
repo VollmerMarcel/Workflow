@@ -48,7 +48,8 @@ inputs = [column for column in columns if column.startswith("in.")]
 metrics = [
     column
     for column in columns
-    if column.endswith("_mean") or column.endswith("_p95") or column.startswith("failure_")
+    if not column.startswith("in.")
+    and (column.endswith("_mean") or column.endswith("_p95") or column.startswith("failure_"))
 ]
 
 if not metrics:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from carwear_core import ArtifactLayout, CaseFile, DesignPoint, Study
@@ -179,3 +180,53 @@ def test_changed_case_is_not_skipped(tmp_path: Path, fake_engine: Path) -> None:
     assert results[0].status == "ok"
     assert results[1].status == "skipped"
     assert results[0].aggregate["aggregate"]["distance_kilometres"]["mean"] == 99.0 * 250.0
+
+
+def test_changed_seed_is_not_skipped(tmp_path: Path, fake_engine: Path) -> None:
+    study = _study()
+    layout = ArtifactLayout.create(tmp_path / "artifacts", study.name, run_id="r1")
+    cases = _cases(tmp_path, study, layout)
+    point_results(study, cases, layout, str(fake_engine), jobs=1, force=False)
+
+    cases[0].point.seed += 1
+    results = point_results(study, cases, layout, str(fake_engine), jobs=1, force=False)
+
+    assert results[0].status == "ok"
+    assert results[0].seed == 101
+    assert results[1].status == "skipped"
+
+
+def test_failed_validation_is_not_skipped_on_resume(tmp_path: Path, fake_engine: Path) -> None:
+    study = _study()
+    layout = ArtifactLayout.create(tmp_path / "artifacts", study.name, run_id="r1")
+    cases = _cases(tmp_path, study, layout)
+    point_results(study, cases, layout, str(fake_engine), jobs=1, force=False)
+
+    cases[0].path.write_text(
+        CASE.format(name="demo-p0000", commute=10.0, mass=1400.0) + "\n[test]\nwarn = true\n",
+        encoding="utf-8",
+    )
+    first = point_results(study, cases, layout, str(fake_engine), jobs=1, force=False)
+    second = point_results(study, cases, layout, str(fake_engine), jobs=1, force=False)
+
+    assert first[0].status == "failed"
+    assert second[0].status == "failed"
+    assert not (layout.point_dir("p0000") / "aggregate.toml").exists()
+
+
+def test_forced_failure_removes_the_previous_aggregate(tmp_path: Path, fake_engine: Path) -> None:
+    study = _study()
+    layout = ArtifactLayout.create(tmp_path / "artifacts", study.name, run_id="r1")
+    cases = _cases(tmp_path, study, layout)
+    point_results(study, cases, layout, str(fake_engine), jobs=1, force=False)
+
+    cases[0].path.write_text(
+        CASE.format(name="demo-p0000", commute=10.0, mass=1400.0) + "\n[test]\nfail = true\n",
+        encoding="utf-8",
+    )
+    results = point_results(study, cases, layout, str(fake_engine), jobs=1, force=True)
+
+    assert results[0].status == "failed"
+    assert not (layout.point_dir("p0000") / "aggregate.toml").exists()
+    meta = json.loads((layout.point_dir("p0000") / "meta.json").read_text(encoding="utf-8"))
+    assert meta["returncode"] != 0
