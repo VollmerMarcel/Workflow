@@ -12,15 +12,18 @@ study.toml → expand design points → run Monte Carlo per point
 
 | Path | Purpose |
 |---|---|
-| `engine/` | C++20 simulation engine (CMake, Conan, CTest) |
-| `packages/carwear_core/` | Shared models, artifact layout, hashing |
-| `packages/carwear_study/` | Study schema, design expansion, case generation |
-| `packages/carwear_engine/` | Subprocess adapter for `carwear.exe` |
-| `packages/carwear_analysis/` | Result collection, summary, sensitivity |
-| `packages/carwear_workflow/` | Hamilton DAG and CLI |
-| `packages/carwear_dashboard/` | Streamlit + Plotly dashboard |
+| [`engine/`](engine/README.md) | C++20 simulation engine (CMake, Conan, CTest) |
+| [`packages/carwear_core/`](packages/carwear_core/README.md) | Shared models, artifact layout, hashing |
+| [`packages/carwear_study/`](packages/carwear_study/README.md) | Study schema, design expansion, case generation |
+| [`packages/carwear_engine/`](packages/carwear_engine/README.md) | Subprocess adapter for `carwear.exe` |
+| [`packages/carwear_analysis/`](packages/carwear_analysis/README.md) | Result collection, summary, sensitivity |
+| [`packages/carwear_workflow/`](packages/carwear_workflow/README.md) | Hamilton DAG and CLI |
+| [`packages/carwear_dashboard/`](packages/carwear_dashboard/README.md) | Streamlit + Plotly dashboard |
 | `studies/` | Example study definitions |
 | `artifacts/` | Run outputs (git-ignored) |
+
+Every subproject has its own README (purpose, API, usage, boundaries) and an
+`AGENTS.md` with the rules an agent needs before editing it.
 
 ## Quick start
 
